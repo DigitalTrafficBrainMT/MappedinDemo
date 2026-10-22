@@ -49,6 +49,11 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
     - **Mappedin `Navigation` is no longer used for drawing.** Its `pathOptions.visible: false` is ignored: it still drew a thin raw-geometry line underneath, which was the real cause of the light-blue slivers. `updateState(path, { visible })` doesn't hide paths either. Markers are now placed directly; floor sync uses our own list.
     - `xray` opacity 0, so there's no faint copy behind walls.
 
+16. **Route polish** (user feedback: squashed arrows, runs not square to the building, seams):
+    - The grid angle comes from the floor's **room outlines** (`gridAngle` over the space polygons), not from the route's own drifting points.
+    - The base line is **one continuous path per floor**. The navy leg is laid on top with the same geometry and no border (a border drew ticks across square cuts).
+    - **Arrows only on straight parts** of the navy leg, at least 1 m clear of bends. The SDK spaces arrows evenly, so some used to land on curves and get squashed.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

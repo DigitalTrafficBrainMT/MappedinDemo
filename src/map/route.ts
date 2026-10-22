@@ -1,16 +1,18 @@
-// Draws the route Battersea-style: straight "pipework" runs with rounded
-// corners in bright blue, and the current step's leg in dark navy with white
-// arrows. Mappedin's Navigation isn't used for drawing: its raw points
-// zig-zag inside corridors, its section highlight is a separate overlay whose
-// ends never line up, and it always draws a line of its own underneath.
+// Draws the route Battersea-style: straight "pipework" runs aligned to the
+// building's walls, rounded right-angle corners, bright blue, with the
+// current step's leg in dark navy carrying white arrows.
 //
-// Instead each floor's straightened line is drawn as non-overlapping pieces:
-// blue before the current leg, navy for it, blue after. The joins sit in the
-// middle of straight runs, so they're invisible, and every corner is drawn by
-// exactly one piece — no slivers of one colour peeking out from under another.
+// - Mappedin's Navigation isn't used for drawing: its raw points zig-zag,
+//   and it always draws a line of its own underneath (visible:false is
+//   ignored), which peeked out as slivers.
+// - Each floor's base line is ONE continuous path (no joins, so no seams).
+//   The navy leg is laid exactly on top from the same geometry, carried round
+//   its corners and cut square mid-run.
+// - Arrows are drawn only on straight parts of the navy leg: the SDK spaces
+//   arrows evenly, and any that land on a bend get squashed.
 import type { Coordinate, Directions, MapData, MapView, Marker, Path, TDirectionInstruction } from "@mappedin/mappedin-js";
 import { CAMERA, ROUTE_ACTIVE_COLOR, ROUTE_ARROW_COLOR, ROUTE_COLOR, ROUTE_SHAPE } from "../config";
-import { project, slice, straighten, type XY } from "../directions/straighten";
+import { gridAngle, project, slice, straighten, type XY } from "../directions/straighten";
 import type { IconName } from "../ui/icons";
 import { motion } from "../util/motion";
 import { connectionMarkerHtml, departureMarkerHtml, destinationMarkerHtml } from "./markers";
@@ -20,6 +22,10 @@ const EARTH_M_PER_DEG = 111_320;
 const LEG_OVERRUN_M = 1.2;
 /** The SDK's default ribbon endcap, kept where the route itself starts/ends. */
 const ROUND_CAP_M = 0.5;
+/** Keep arrows this far from a bend so none is drawn on the curve. */
+const ARROW_CORNER_CLEARANCE_M = 1.0;
+/** A straight run needs at least this much room to carry an arrow. */
+const ARROW_MIN_RUN_M = 1.4;
 
 function lineLength(line: XY[]): number {
   let total = 0;
@@ -40,9 +46,10 @@ export class RouteLayer {
   private mapData: MapData;
   private origin = { lat: 0, lng: 0, cos: 1 };
   private stretches: Stretch[] = [];
-  /** The stretch currently split around a navy leg, if any. */
-  private split: Stretch | null = null;
+  /** Paths making up the current navy leg (body + arrow runs). */
+  private legPaths: Path[] = [];
   private markers: Marker[] = [];
+  private wallAngles = new Map<string, number>();
 
   constructor(mapView: MapView, mapData: MapData) {
     this.mapView = mapView;
@@ -78,7 +85,7 @@ export class RouteLayer {
     let current: Coordinate[] = [];
     const flush = () => {
       if (current.length >= 2) {
-        const line = straighten(current.map((c) => this.toXY(c)));
+        const line = straighten(current.map((c) => this.toXY(c)), this.wallAngle(current[0].floorId ?? ""));
         this.stretches.push({ floorId: current[0].floorId ?? "", line, length: lineLength(line), paths: [] });
       }
       current = [];
@@ -89,7 +96,15 @@ export class RouteLayer {
     }
     flush();
 
-    this.stretches.forEach((stretch) => this.drawWhole(stretch, motion(600)));
+    this.stretches.forEach((stretch) =>
+      stretch.paths.push(
+        this.addLine(stretch.floorId, stretch.line, {
+          color: ROUTE_COLOR,
+          caps: [ROUND_CAP_M, ROUND_CAP_M],
+          drawDuration: motion(600),
+        }),
+      ),
+    );
   }
 
   /** Dark-navy leg with white arrows, carried round the corners at its ends. */
@@ -105,24 +120,56 @@ export class RouteLayer {
     const start = Math.max(0, a - LEG_OVERRUN_M);
     const end = Math.min(stretch.length, b + LEG_OVERRUN_M);
 
-    this.removePaths(stretch);
-    this.addPiece(stretch, 0, start, ROUTE_COLOR, false, 0);
-    this.addPiece(stretch, start, end, ROUTE_ACTIVE_COLOR, true, motion(CAMERA.highlightDuration), !forward);
-    this.addPiece(stretch, end, stretch.length, ROUTE_COLOR, false, 0);
-    this.split = stretch;
+    const leg = slice(stretch.line, start, end);
+    if (!forward) leg.reverse();
+    const roundStart = (forward ? start : stretch.length - end) < 0.01;
+    const roundEnd = (forward ? stretch.length - end : start) < 0.01;
+
+    // The navy body: no border (it would draw ticks across the square cuts),
+    // a hair wider than the base so the blue's edge can't show.
+    this.legPaths.push(
+      this.addLine(stretch.floorId, leg, {
+        color: ROUTE_ACTIVE_COLOR,
+        caps: [roundStart ? ROUND_CAP_M : 0, roundEnd ? ROUND_CAP_M : 0],
+        border: false,
+        widthScale: 1.06,
+        verticalOffset: 0.12,
+        drawDuration: motion(CAMERA.highlightDuration),
+      }),
+    );
+
+    // Arrows only on the straight runs, clear of every bend.
+    for (let i = 1; i < leg.length; i++) {
+      const a = leg[i - 1];
+      const b = leg[i];
+      const runLength = Math.hypot(b.x - a.x, b.y - a.y);
+      const clearA = i === 1 ? 0.4 : ARROW_CORNER_CLEARANCE_M;
+      const clearB = i === leg.length - 1 ? 0.4 : ARROW_CORNER_CLEARANCE_M;
+      if (runLength - clearA - clearB < ARROW_MIN_RUN_M) continue;
+      const along = (d: number) => ({ x: a.x + ((b.x - a.x) * d) / runLength, y: a.y + ((b.y - a.y) * d) / runLength });
+      this.legPaths.push(
+        this.addLine(stretch.floorId, [along(clearA), along(runLength - clearB)], {
+          color: ROUTE_ACTIVE_COLOR,
+          caps: [0, 0],
+          border: false,
+          widthScale: 1.06,
+          verticalOffset: 0.14,
+          arrows: true,
+          drawDuration: 0,
+        }),
+      );
+    }
   }
 
   clearHighlight() {
-    if (!this.split) return;
-    this.removePaths(this.split);
-    this.drawWhole(this.split, 0);
-    this.split = null;
+    this.legPaths.forEach((path) => this.mapView.Paths.remove(path));
+    this.legPaths = [];
   }
 
   clear() {
-    this.stretches.forEach((stretch) => this.removePaths(stretch));
+    this.clearHighlight();
+    this.stretches.forEach((stretch) => stretch.paths.forEach((path) => this.mapView.Paths.remove(path)));
     this.stretches = [];
-    this.split = null;
     this.markers.forEach((marker) => this.mapView.Markers.remove(marker));
     this.markers = [];
   }
@@ -138,46 +185,61 @@ export class RouteLayer {
     }
   }
 
-  private drawWhole(stretch: Stretch, drawDuration: number) {
-    this.addPiece(stretch, 0, stretch.length, ROUTE_COLOR, false, drawDuration);
+  private addLine(
+    floorId: string,
+    line: XY[],
+    o: {
+      color: string;
+      caps: [number, number];
+      drawDuration: number;
+      border?: boolean;
+      widthScale?: number;
+      verticalOffset?: number;
+      arrows?: boolean;
+    },
+  ): Path {
+    return this.mapView.Paths.add(this.toCoordinates(floorId, line), {
+      ...ROUTE_SHAPE,
+      ...(o.border === false ? { border: { enabled: false, color: "darken" } } : {}),
+      width: ROUTE_SHAPE.width * (o.widthScale ?? 1),
+      color: o.color,
+      accentColor: ROUTE_ARROW_COLOR,
+      displayArrowsOnPath: o.arrows ?? false,
+      endcapExtension: o.caps,
+      verticalOffset: o.verticalOffset ?? 0.1,
+      animateDrawing: o.drawDuration > 0,
+      drawDuration: o.drawDuration,
+    });
   }
 
-  /** Draw the part of a stretch between two arc lengths. */
-  private addPiece(
-    stretch: Stretch,
-    from: number,
-    to: number,
-    color: string,
-    arrows: boolean,
-    drawDuration: number,
-    reverse = false,
-  ) {
-    if (to - from < 0.05) return;
-    const line = slice(stretch.line, from, to);
-    if (reverse) line.reverse();
-    // Round caps only where the route itself starts or ends; square cuts
-    // where pieces meet, so the joins disappear.
-    const roundFrom = from < 0.01;
-    const roundTo = stretch.length - to < 0.01;
-    const caps: [number, number] = reverse
-      ? [roundTo ? ROUND_CAP_M : 0, roundFrom ? ROUND_CAP_M : 0]
-      : [roundFrom ? ROUND_CAP_M : 0, roundTo ? ROUND_CAP_M : 0];
-    stretch.paths.push(
-      this.mapView.Paths.add(this.toCoordinates(stretch.floorId, line), {
-        ...ROUTE_SHAPE,
-        color,
-        accentColor: ROUTE_ARROW_COLOR,
-        displayArrowsOnPath: arrows,
-        endcapExtension: caps,
-        animateDrawing: drawDuration > 0,
-        drawDuration,
-      }),
-    );
+  /**
+   * The building's wall grid on a floor, from its room outlines. The route's
+   * own points drift a few degrees; the walls don't.
+   */
+  private wallAngle(floorId: string): number | undefined {
+    const cached = this.wallAngles.get(floorId);
+    if (cached !== undefined) return cached;
+    const segments: [XY, XY][] = [];
+    for (const space of this.mapData.getByType("space")) {
+      if (space.floor.id !== floorId) continue;
+      const geometry = space.geoJSON?.geometry as { type?: string; coordinates?: number[][][] } | undefined;
+      if (geometry?.type !== "Polygon" || !geometry.coordinates) continue;
+      for (const ring of geometry.coordinates) {
+        for (let i = 1; i < ring.length; i++) {
+          segments.push([this.lngLatToXY(ring[i - 1]), this.lngLatToXY(ring[i])]);
+        }
+      }
+    }
+    const angle = segments.length ? gridAngle(segments) : undefined;
+    if (angle !== undefined) this.wallAngles.set(floorId, angle);
+    return angle;
   }
 
-  private removePaths(stretch: Stretch) {
-    stretch.paths.forEach((path) => this.mapView.Paths.remove(path));
-    stretch.paths = [];
+  private lngLatToXY([lng, lat]: number[]): XY {
+    return {
+      x: (lng - this.origin.lng) * EARTH_M_PER_DEG * this.origin.cos,
+      y: (lat - this.origin.lat) * EARTH_M_PER_DEG,
+    };
   }
 
   // Local metres around the route's start: plenty accurate indoors.

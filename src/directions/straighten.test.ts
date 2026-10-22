@@ -67,3 +67,14 @@ describe("project / slice", () => {
     close(part[2], { x: 10, y: 5 });
   });
 });
+
+describe("straighten with a known building grid", () => {
+  it("aligns runs to the given grid angle, not the route's own drift", () => {
+    // Route drifts ~4° but the building is axis-aligned (angle 0).
+    const route: XY[] = [{ x: 0, y: 0 }, { x: 10, y: 0.7 }, { x: 10.7, y: 10 }];
+    const out = straighten(route, 0);
+    // Middle corner shares x with the end and y with the start: true axis lines.
+    expect(out[1].y).toBeCloseTo(0, 6);
+    expect(out[1].x).toBeCloseTo(10.7, 6);
+  });
+});

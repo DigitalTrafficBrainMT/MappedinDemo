@@ -31,22 +31,32 @@ const len = (a: XY, b: XY) => Math.hypot(b.x - a.x, b.y - a.y);
  * and east–west corridors agree.
  */
 export function dominantAngle(points: XY[]): number {
+  return gridAngle(points.slice(1).map((p, i) => [points[i], p] as [XY, XY]));
+}
+
+/**
+ * The same fold-to-90° average over any set of segments — fed the room
+ * outlines of a floor, it gives the building's true wall grid, which is
+ * steadier than guessing from the route's own (wobbly) points.
+ */
+export function gridAngle(segments: [XY, XY][]): number {
   let c = 0;
   let s = 0;
-  for (let i = 1; i < points.length; i++) {
-    const w = len(points[i - 1], points[i]);
-    const a = Math.atan2(points[i].y - points[i - 1].y, points[i].x - points[i - 1].x);
-    c += w * Math.cos(4 * a);
-    s += w * Math.sin(4 * a);
+  for (const [a, b] of segments) {
+    const w = len(a, b);
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    c += w * Math.cos(4 * angle);
+    s += w * Math.sin(4 * angle);
   }
   return Math.atan2(s, c) / 4;
 }
 
-export function straighten(input: XY[]): XY[] {
+/** `angle` is the building's grid angle; defaults to one guessed from the route. */
+export function straighten(input: XY[], angle?: number): XY[] {
   const points = input.filter((p, i) => i === 0 || len(input[i - 1], p) > 0.05);
   if (points.length < 3) return points;
 
-  const angle = dominantAngle(points);
+  angle ??= dominantAngle(points);
   const local = points.map((p) => rotate(p, -angle));
 
   // Each segment belongs to whichever axis it runs closest to.
