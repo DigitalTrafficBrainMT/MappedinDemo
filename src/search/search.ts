@@ -42,7 +42,7 @@ export function rankPlaces(places: PlaceSummary[], query: string, limit = 50): P
     const name = normalize(place.displayName);
     let score = -1;
     if (name.startsWith(q)) score = 0;
-    else if (name.split(" ").some((word, i, words) => words.slice(i).join(" ").startsWith(q))) score = 1;
+    else if (name.split(" ").some((_word, i, words) => words.slice(i).join(" ").startsWith(q))) score = 1;
     else if (name.includes(q)) score = 2;
     if (score >= 0) scored.push({ place, score });
   }
