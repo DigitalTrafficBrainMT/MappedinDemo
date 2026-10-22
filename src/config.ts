@@ -25,8 +25,8 @@ export const LANDMARK_EXCLUDE = /storage|electrical|custodial/i;
 
 // Route colours (ADR-002). Observed from the Battersea reference; WebGL
 // pixels can't be measured, so these are tuned by eye.
-export const ROUTE_COLOR = "#3D6EFF";
-export const ROUTE_ACTIVE_COLOR = "#1F3CB8";
+export const ROUTE_COLOR = "#4C82FF";
+export const ROUTE_ACTIVE_COLOR = "#1A2C9E";
 
 // Camera presets (spec §6). Bearing is always the venue's own default.
 export const CAMERA = {

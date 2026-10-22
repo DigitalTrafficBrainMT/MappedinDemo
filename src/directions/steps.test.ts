@@ -92,6 +92,28 @@ describe("buildSteps rules", () => {
     expect(steps.map((s) => s.kind)).toEqual(["depart", "arrive"]);
   });
 
+  it("reads a tight loop of left turns as a left, not 'turn around' or right", () => {
+    // East for 11 m, then left-left-left 2 m apart (−270° in total) into a
+    // doorway. Comparing only the first and last headings wraps to +90°
+    // ("right"); summing each bend keeps the real direction.
+    const A = { lat: 0, lng: 0 };
+    const B = { lat: 0, lng: 0.0001 };
+    const C = { lat: 0.000018, lng: 0.0001 };
+    const D = { lat: 0.000018, lng: 0.000082 };
+    const E = { lat: 0, lng: 0.000082 };
+    const steps = buildSteps({
+      ...base,
+      instructions: [
+        at(A, { type: "Departure", distance: 0 }),
+        at(B, { bearing: "Left", distance: 11.1 }),
+        at(C, { bearing: "Left", distance: 2 }),
+        at(D, { bearing: "Left", distance: 2 }),
+        at(E, { type: "Arrival", distance: 2 }),
+      ],
+    });
+    expect(steps.map((s) => s.text)).toEqual(["Leave Lobby", "Turn left", "Arrive at Kitchen"]);
+  });
+
   it("uses 'lift' for elevators and falls back without a direction", () => {
     const steps = buildSteps({
       ...base,

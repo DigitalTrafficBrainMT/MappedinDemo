@@ -103,12 +103,15 @@ function turnFromSdkBearing(bearing: string | undefined): Turn | null {
   }
 }
 
-function turnFromAngle(delta: number): Turn | null {
+// `delta` is the total signed turning through a cluster (can exceed ±180°).
+// Over ANGLE_TURN, a single bend is a real reversal ("Turn around"); several
+// quick bends the same way are a doorway loop, which people call a turn.
+function turnFromAngle(delta: number, multipleBends: boolean): Turn | null {
   const abs = Math.abs(delta);
   const side: Side = delta > 0 ? "right" : "left";
   if (abs < ANGLE_STRAIGHT) return null;
   if (abs < ANGLE_SLIGHT) return { kind: "bear", side };
-  if (abs <= ANGLE_TURN) return { kind: "turn", side };
+  if (abs <= ANGLE_TURN || multipleBends) return { kind: "turn", side };
   return { kind: "uturn" };
 }
 
@@ -156,6 +159,22 @@ export function buildSteps(input: BuildStepsInput): Step[] {
       if (distanceM(ins[m - 1], ins[m]) > 0.05) return bearingDeg(ins[m - 1], ins[m]);
     }
     return undefined;
+  };
+
+  // Sum the signed turn at every bend in a cluster. Comparing only the
+  // first and last headings wraps past 180°, so three quick lefts (−270°)
+  // would read as a right.
+  const totalTurn = (start: number, end: number): number | undefined => {
+    let heading = headingInto(start);
+    if (heading === undefined) return undefined;
+    let total = 0;
+    for (let k = start; k <= end; k++) {
+      const out = headingOutOf(k);
+      if (out === undefined) return undefined;
+      total += turnAngle(heading, out);
+      heading = out;
+    }
+    return total;
   };
 
   type Draft = Omit<Step, "timeText" | "legEndIndex" | "legDistance" | "cumulative">;
@@ -214,14 +233,10 @@ export function buildSteps(input: BuildStepsInput): Step[] {
       continue;
     }
 
-    // Turn: merge the cluster and judge it by the net change of heading.
+    // Turn: merge the cluster and judge it by the total turning through it.
     const end = clusterEnd(i);
-    const inHeading = headingInto(i);
-    const outHeading = headingOutOf(end);
-    const turn =
-      inHeading !== undefined && outHeading !== undefined
-        ? turnFromAngle(turnAngle(inHeading, outHeading))
-        : turnFromSdkBearing(current.bearing);
+    const total = totalTurn(i, end);
+    const turn = total !== undefined ? turnFromAngle(total, end > i) : turnFromSdkBearing(current.bearing);
     if (turn) {
       const landmark = turn.kind === "uturn" ? undefined : findLandmark(current);
       drafts.push({

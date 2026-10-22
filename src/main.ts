@@ -1,698 +1,420 @@
 import "@mappedin/mappedin-js/lib/index.css";
+import "./styles.css";
 import { getMapData, show3dMap } from "@mappedin/mappedin-js";
-import type { TDirectionInstruction, Directions, Space, Coordinate } from "@mappedin/mappedin-js";
-
-// Mappedin demo keys (Office Demo map)
-const options = {
-  key: "mik_yeBk0Vf0nNJtpesfu560e07e5",
-  secret: "mis_2g9ST8ZcSFb5R9fPnsvYhrX3RyRwPtDGbMGweCYKEq385431022",
-  mapId: "64ef49e662fd90fe020bee61",
-};
-
-// Average indoor walking speed, used to turn distances into the
-// "2 minutes total" style time estimates (the SDK only gives meters).
-const WALK_SPEED_METERS_PER_SECOND = 1.4;
-
-// Full-bleed reset. #app is pinned to the viewport with `position: fixed;
-// inset: 0` rather than sized with 100vw/100vh — vw/vh measure the full
-// viewport *including* the scrollbar track on some browsers, and the
-// default browser margin on <body> was pushing everything a few pixels
-// past the visible edges, which is what showed up as bars on the right
-// and bottom. `overflow: hidden` on html/body also stops that gap from
-// ever becoming a scrollable area, and `inset: 0` recomputes automatically
-// on any window/viewport size, so this adapts to any screen without extra
-// JS or a resize listener.
-const rootStyle = document.createElement("style");
-rootStyle.textContent = `
-  html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    overflow: hidden;
-  }
-  #app {
-    position: fixed;
-    inset: 0;
-  }
-`;
-document.head.appendChild(rootStyle);
+import type { Coordinate, Label, MapData, MapView, Marker, Space } from "@mappedin/mappedin-js";
+import { MAPPEDIN_OPTIONS, MOBILE_QUERY } from "./config";
+import { buildSteps, type RawInstruction, type RawInstructionType } from "./directions/steps";
+import { CameraController } from "./map/camera";
+import { mountFloorSelector } from "./map/floors";
+import { destinationMarkerHtml } from "./map/markers";
+import { RouteLayer } from "./map/route";
+import { PlaceIndex, type Place } from "./places";
+import { HOME, back, getState, navigate, replace, reset, subscribe, type AppState } from "./state";
+import { browseCard } from "./ui/browseCard";
+import type { RouteResult, UIContext, ViewModule } from "./ui/context";
+import { directionsEditor } from "./ui/directionsEditor";
+import { directionsMobile } from "./ui/directionsMobile";
+import { directionsPanel } from "./ui/directionsPanel";
+import { placeIconName } from "./ui/icons";
+import { locationCard } from "./ui/locationCard";
+import { mountMapControls } from "./ui/mapControls";
+import { initSheet, setExpanded } from "./ui/sheet";
+import { distanceM } from "./util/geo";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
-
-// Map fills the whole screen; the wayfinding panel floats on top of it.
 app.innerHTML = `
-  <div id="map" style="position:absolute; inset:0;"></div>
+  <div id="map" class="map"></div>
+  <div id="banner" class="banner" hidden></div>
+  <section id="panel" class="panel" aria-label="Wayfinding" hidden></section>
+  <div id="floor-selector" class="floor-selector"></div>
+  <div id="map-controls" class="map-controls"></div>
+  <div id="overlay" class="overlay"><div class="spinner" role="status" aria-label="Loading map"></div></div>`;
 
-  <div id="floor-selector"></div>
-
-  <div id="search-panel" class="panel">
-    <h2>Wayfinding</h2>
-    <label>
-      From
-      <select id="from-select"></select>
-    </label>
-    <label>
-      To
-      <select id="to-select"></select>
-    </label>
-    <button id="go-btn">Get Directions</button>
-  </div>
-
-  <div id="directions-panel" class="panel" hidden>
-    <div class="directions-header">
-      <button id="back-btn" class="link-btn">&larr; Back</button>
-    </div>
-    <div class="directions-title">
-      <div class="directions-subtitle">Directions to <span id="destination-name"></span></div>
-      <div class="directions-time" id="total-time"></div>
-    </div>
-    <div class="progress-track">
-      <div class="progress-fill" id="progress-fill"></div>
-      <div class="progress-dots" id="progress-dots"></div>
-    </div>
-    <div class="current-location" id="current-location"></div>
-    <div id="directions-list"></div>
-    <div class="step-nav">
-      <button id="prev-btn" class="secondary" aria-label="Previous step">&larr;</button>
-      <button id="next-btn" aria-label="Next step">&rarr;</button>
-    </div>
-  </div>
-`;
-
-// Panel styling injected here so this stays a single self-contained file.
-const style = document.createElement("style");
-style.textContent = `
-  .panel {
-    position: absolute;
-    top: 16px;
-    left: 16px;
-    width: 320px;
-    max-height: calc(100vh - 32px);
-    overflow-y: auto;
-    background: #ffffff;
-    border-radius: 16px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
-    padding: 18px;
-    font-family: system-ui, -apple-system, sans-serif;
-    box-sizing: border-box;
-    z-index: 10;
-  }
-
-  /* --- Search panel --- */
-  #search-panel h2 {
-    margin: 0 0 12px;
-    font-size: 16px;
-  }
-  #search-panel label {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    color: #555;
-    margin-bottom: 10px;
-  }
-  #search-panel select {
-    display: block;
-    width: 100%;
-    margin-top: 4px;
-    padding: 8px;
-    font-size: 14px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    box-sizing: border-box;
-  }
-  #search-panel button {
-    width: 100%;
-    padding: 10px;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    background: #2563eb;
-    color: white;
-    margin-top: 4px;
-  }
-  #search-panel button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* --- Directions panel --- */
-  .directions-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-  }
-  .link-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: #111;
-    cursor: pointer;
-  }
-  .directions-subtitle {
-    font-size: 12px;
-    color: #777;
-    margin-bottom: 2px;
-  }
-  .directions-time {
-    font-size: 22px;
-    font-weight: 700;
-    color: #111;
-    margin-bottom: 14px;
-  }
-
-  .progress-track {
-    position: relative;
-    height: 20px;
-    margin-bottom: 14px;
-  }
-  .progress-fill {
-    position: absolute;
-    top: 9px;
-    left: 9px;
-    right: 9px;
-    height: 2px;
-    background: #e2e2e2;
-  }
-  .progress-fill::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: var(--progress, 0%);
-    background: #2563eb;
-    transition: width 0.25s ease;
-  }
-  .progress-dots {
-    position: relative;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    height: 20px;
-  }
-  .progress-dot {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #fff;
-    border: 2px solid #e2e2e2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    color: #fff;
-    z-index: 1;
-  }
-  .progress-dot.done {
-    background: #2563eb;
-    border-color: #2563eb;
-  }
-  .progress-dot.current {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
-  }
-
-  .current-location {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 700;
-    font-size: 14px;
-    color: #111;
-    padding-bottom: 10px;
-    margin-bottom: 6px;
-    border-bottom: 1px solid #eee;
-  }
-  .current-location::before {
-    content: "";
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #999;
-    flex-shrink: 0;
-  }
-
-  #directions-list .step {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    padding: 10px 6px;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  #directions-list .step.active {
-    background: #f0f5ff;
-  }
-  #directions-list .step-icon {
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: #f2f2f2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  #directions-list .step.active .step-icon {
-    background: #2563eb;
-    color: #fff;
-  }
-  #directions-list .step-icon svg {
-    width: 16px;
-    height: 16px;
-  }
-  #directions-list .step-text {
-    line-height: 1.35;
-    font-size: 14px;
-    font-weight: 600;
-    color: #111;
-  }
-  #directions-list .step-time {
-    color: #888;
-    font-size: 12px;
-    font-weight: 400;
-    margin-top: 2px;
-  }
-  #directions-list .empty {
-    color: #888;
-    font-size: 13px;
-    padding: 8px 0;
-  }
-
-  .step-nav {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-  }
-  .step-nav button {
-    flex: 1;
-    padding: 10px;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    background: #2563eb;
-    color: white;
-  }
-  .step-nav button.secondary {
-    background: #f0f0f0;
-    color: #333;
-  }
-  .step-nav button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  /* --- Floor selector --- */
-  #floor-selector {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 10;
-  }
-  #floor-selector:not([hidden]) {
-    display: flex;
-  }
-  #floor-selector button {
-    min-width: 40px;
-    height: 40px;
-    padding: 0 10px;
-    border-radius: 20px;
-    border: none;
-    background: #ffffff;
-    color: #333;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-    font-family: system-ui, -apple-system, sans-serif;
-    white-space: nowrap;
-  }
-  #floor-selector button.active {
-    background: #111;
-    color: #fff;
-  }
-`;
-document.head.appendChild(style);
-
-// ---------------------------------------------------------------------------
-// Heading — used to rotate the camera so the direction of travel always
-// points "up" on screen, like turn-by-turn heading-up navigation.
-// ---------------------------------------------------------------------------
-
-// Compass bearing (degrees clockwise from North) from one coordinate to
-// another, matching the convention Camera.animateTo's `bearing` expects.
-function bearingBetween(from: Coordinate, to: Coordinate): number {
-  const lat1 = (from.latitude * Math.PI) / 180;
-  const lat2 = (to.latitude * Math.PI) / 180;
-  const dLon = ((to.longitude - from.longitude) * Math.PI) / 180;
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  const degrees = (Math.atan2(y, x) * 180) / Math.PI;
-  return (degrees + 360) % 360;
-}
-
-// ---------------------------------------------------------------------------
-// Time + text formatting
-// ---------------------------------------------------------------------------
-
-function formatDuration(meters: number): string {
-  const seconds = meters / WALK_SPEED_METERS_PER_SECOND;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 1) return "Less than a minute";
-  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
-}
-
-// Turns a raw instruction into a readable sentence.
-// The SDK gives structured data (action type/bearing + distance), not
-// pre-written text, so we build the sentence ourselves.
-function describeInstruction(instruction: TDirectionInstruction, fromName: string): string {
-  const type = instruction.action?.type;
-  const bearing = instruction.action?.bearing;
-
-  if (type === "Departure") return `Leave ${fromName}`;
-  if (type === "Arrival") return "You have arrived at your destination";
-  if (type === "TakeConnection") {
-    const direction = instruction.action?.direction;
-    const connectionType = instruction.action?.connection?.type ?? "connection";
-    const verb = connectionType === "elevator" ? "Take the elevator" : `Take the ${connectionType}`;
-    return `${verb}${direction && direction !== "none" ? ` ${direction}` : ""}`;
-  }
-  if (type === "ExitConnection") return "Exit and head out";
-  if (type === "Turn" && bearing) {
-    if (bearing === "Straight") return "Continue straight";
-    return `Turn ${bearing.replace(/([A-Z])/g, " $1").trim().toLowerCase()}`;
-  }
-  return "Continue";
-}
-
-// ---------------------------------------------------------------------------
-// Icons — one small inline SVG per action, with turn icons rotated to match
-// the bearing so the arrow actually points the way you're turning.
-// ---------------------------------------------------------------------------
-
-const ARROW_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M12 5l-6 6M12 5l6 6"/></svg>`;
-const PIN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
-const WALK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M14 8l-3 3 1 7M11 11 7 13l-1 6M11 11l4 2 3 3"/></svg>`;
-const ELEVATOR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M10 9l2-2 2 2M10 15l2 2 2-2"/></svg>`;
-const ESCALATOR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h4l10-10h2M4 18v2M20 8V6"/><circle cx="18" cy="5" r="1.5" fill="currentColor" stroke="none"/></svg>`;
-const STAIRS_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4v-4h4v-4h4V8h4"/></svg>`;
-
-const BEARING_ROTATION: Record<string, number> = {
-  Straight: 0,
-  Right: 90,
-  SlightRight: 45,
-  Left: -90,
-  SlightLeft: -45,
-  Back: 180,
+const el = {
+  map: document.getElementById("map")!,
+  banner: document.getElementById("banner")!,
+  panel: document.getElementById("panel")!,
+  floors: document.getElementById("floor-selector")!,
+  controls: document.getElementById("map-controls")!,
+  overlay: document.getElementById("overlay")!,
 };
 
-function connectionIcon(connectionType: string | undefined): string {
-  if (connectionType === "elevator") return ELEVATOR_SVG;
-  if (connectionType === "escalator") return ESCALATOR_SVG;
-  if (connectionType === "stairs") return STAIRS_SVG;
-  return ARROW_SVG;
-}
-
-function iconFor(instruction: TDirectionInstruction): string {
-  const type = instruction.action?.type;
-  if (type === "Departure") return WALK_SVG;
-  if (type === "Arrival") return PIN_SVG;
-  if (type === "TakeConnection" || type === "ExitConnection") {
-    return connectionIcon(instruction.action?.connection?.type);
-  }
-  if (type === "Turn") {
-    const rotation = BEARING_ROTATION[instruction.action?.bearing ?? "Straight"] ?? 0;
-    return `<span style="display:flex; transform: rotate(${rotation}deg);">${ARROW_SVG}</span>`;
-  }
-  return ARROW_SVG;
-}
-
-// ---------------------------------------------------------------------------
 // show3dMap needs the container to already have a real size. On the very
-// first paint the browser can still report 0x0, so wait a frame until it
-// doesn't before handing the container to the SDK.
-// ---------------------------------------------------------------------------
-
-function waitForNonZeroSize(el: HTMLElement): Promise<void> {
+// first paint the browser can still report 0x0, so wait until it doesn't.
+function waitForNonZeroSize(target: HTMLElement): Promise<void> {
   return new Promise((resolve) => {
-    function check() {
-      if (el.clientWidth > 0 && el.clientHeight > 0) {
-        resolve();
-      } else {
-        requestAnimationFrame(check);
-      }
-    }
+    const check = () => (target.clientWidth > 0 && target.clientHeight > 0 ? resolve() : requestAnimationFrame(check));
     check();
   });
 }
 
-async function init() {
-  const mapContainer = document.getElementById("map")!;
-  await waitForNonZeroSize(mapContainer);
-
-  // Fetch the venue data, then render it in 3D
-  const mapData = await getMapData(options);
-  const mapView = await show3dMap(mapContainer, mapData);
-
-  // Label every named space so the map is readable out of the box
-  const spaces = mapData.getByType("space").filter((space) => !!space.name);
-  spaces.forEach((space) => {
-    mapView.Labels.add(space, space.name);
-  });
-
-  // --- Elements ---
-  const searchPanel = document.getElementById("search-panel") as HTMLDivElement;
-  const directionsPanel = document.getElementById("directions-panel") as HTMLDivElement;
-  const fromSelect = document.getElementById("from-select") as HTMLSelectElement;
-  const toSelect = document.getElementById("to-select") as HTMLSelectElement;
-  const goBtn = document.getElementById("go-btn") as HTMLButtonElement;
-  const backBtn = document.getElementById("back-btn") as HTMLButtonElement;
-  const prevBtn = document.getElementById("prev-btn") as HTMLButtonElement;
-  const nextBtn = document.getElementById("next-btn") as HTMLButtonElement;
-  const destinationNameEl = document.getElementById("destination-name")!;
-  const totalTimeEl = document.getElementById("total-time")!;
-  const currentLocationEl = document.getElementById("current-location")!;
-  const listEl = document.getElementById("directions-list")!;
-  const progressFillEl = document.getElementById("progress-fill") as HTMLDivElement;
-  const progressDotsEl = document.getElementById("progress-dots")!;
-  const floorSelectorEl = document.getElementById("floor-selector")!;
-
-  // --- Floor selector: one button per floor, top → bottom by elevation,
-  // shown while browsing the map but hidden during active directions
-  // (matching how the Battersea reference site hides it mid-route). ---
-  const floors = [...mapView.currentFloorStack.floors].sort((a, b) => b.elevation - a.elevation);
-  floorSelectorEl.innerHTML = floors
-    .map((floor) => `<button data-floor-id="${floor.id}">${floor.shortName}</button>`)
-    .join("");
-
-  function syncFloorSelector() {
-    floorSelectorEl.querySelectorAll<HTMLButtonElement>("button").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.floorId === mapView.currentFloor?.id);
-    });
+async function start() {
+  try {
+    await waitForNonZeroSize(el.map);
+    const mapData = await getMapData(MAPPEDIN_OPTIONS);
+    const mapView = await show3dMap(el.map, mapData);
+    setup(mapData, mapView);
+    el.overlay.hidden = true;
+  } catch (error) {
+    console.error("Failed to load the map:", error);
+    el.overlay.innerHTML = `<div class="error-card" role="alert">
+      <h2>Couldn't load the map</h2>
+      <p>Check your connection and try again.</p>
+      <button type="button" class="btn-primary" id="retry">Try again</button>
+    </div>`;
+    document.getElementById("retry")?.addEventListener("click", () => location.reload());
   }
-  floorSelectorEl.querySelectorAll<HTMLButtonElement>("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.dataset.floorId) mapView.setFloor(btn.dataset.floorId);
-    });
-  });
-  mapView.on("floor-change", syncFloorSelector);
-  syncFloorSelector();
-
-  // Populate the From/To dropdowns with every named space
-  const optionsHtml = spaces
-    .map((space) => `<option value="${space.id}">${space.name}</option>`)
-    .join("");
-  fromSelect.innerHTML = optionsHtml;
-  toSelect.innerHTML = optionsHtml;
-  // Default to two different spaces so a first click has something to show
-  if (spaces.length > 1) toSelect.selectedIndex = 1;
-
-  // --- State for the active route ---
-  let activeDirections: Directions | null = null;
-  let currentStepIndex = 0;
-  // The step the "walked so far" highlight currently ends at.
-  let highlightedStepIndex = -1;
-  // Bumped on every highlight request; a running grow-in animation checks
-  // this each frame and bails out as soon as it's stale, so a fast new
-  // request cleanly supersedes an older one instead of fighting it.
-  let highlightAnimationToken = 0;
-
-  function showSearchView() {
-    mapView.Navigation.clear();
-    activeDirections = null;
-    searchPanel.hidden = false;
-    directionsPanel.hidden = true;
-    floorSelectorEl.hidden = false;
-  }
-
-  const HIGHLIGHT_COLOR = "#2563eb";
-
-  // highlightPathSection isn't additive — each call replaces the entire
-  // highlighted range, it doesn't extend the previous one. So to keep every
-  // already-walked segment dark, every call must highlight the FULL
-  // (routeStart -> target) range, never just the newest increment.
-  function setHighlight(start: Coordinate, target: Coordinate) {
-    mapView.Navigation.highlightPathSection(start, target, {
-      color: HIGHLIGHT_COLOR,
-      widthMultiplier: 1.1,
-      animationDuration: 0,
-    });
-  }
-
-  // Animates the highlighted range growing from `fromCoordinate` to
-  // `toCoordinate` by re-issuing setHighlight() every frame with an
-  // interpolated endpoint — since the SDK's own animation only ever
-  // animates the single range it's given (dropping earlier history), we
-  // drive the "grow" effect ourselves instead.
-  function animateHighlightGrowth(start: Coordinate, fromCoordinate: Coordinate, toCoordinate: Coordinate) {
-    const token = ++highlightAnimationToken;
-    const duration = 450;
-    const startTime = performance.now();
-    const floor = toCoordinate.floorId ? mapData.getById("floor", toCoordinate.floorId) : undefined;
-
-    function frame(now: number) {
-      if (token !== highlightAnimationToken) return; // a newer request took over
-      const t = Math.min((now - startTime) / duration, 1);
-      const eased = 1 - (1 - t) * (1 - t); // ease-out
-      if (t < 1) {
-        const latitude = fromCoordinate.latitude + (toCoordinate.latitude - fromCoordinate.latitude) * eased;
-        const longitude = fromCoordinate.longitude + (toCoordinate.longitude - fromCoordinate.longitude) * eased;
-        setHighlight(start, mapView.createCoordinate(latitude, longitude, floor));
-        requestAnimationFrame(frame);
-      } else {
-        setHighlight(start, toCoordinate);
-      }
-    }
-    requestAnimationFrame(frame);
-  }
-
-  function goToStep(index: number) {
-    if (!activeDirections) return;
-    const instructions = activeDirections.instructions;
-    currentStepIndex = Math.max(0, Math.min(index, instructions.length - 1));
-
-    // Highlight the portion of the path walked so far, and pan the camera
-    // to where this step happens. Moving forward exactly one step (the
-    // normal Next-button flow) animates the highlight growing in; jumping
-    // to an arbitrary step or moving backward just snaps it instantly.
-    const start = activeDirections.coordinates[0];
-    const target = instructions[currentStepIndex].coordinate;
-    if (start) {
-      const movingForwardOneStep = currentStepIndex === highlightedStepIndex + 1;
-      const previousTarget = instructions[highlightedStepIndex]?.coordinate;
-      if (movingForwardOneStep && previousTarget && previousTarget.floorId === target.floorId) {
-        animateHighlightGrowth(start, previousTarget, target);
-      } else {
-        highlightAnimationToken++; // cancel any animation still in flight
-        setHighlight(start, target);
-      }
-      highlightedStepIndex = currentStepIndex;
-    }
-    const stepFloorId = target.floorId;
-    if (stepFloorId && stepFloorId !== mapView.currentFloor?.id) {
-      mapView.setFloor(stepFloorId);
-    }
-
-    // Rotate the camera to face the direction of travel: the bearing to the
-    // *next* step if there is one (facing where you're about to go), or the
-    // bearing from the previous step on arrival (facing how you got here).
-    const nextCoordinate = instructions[currentStepIndex + 1]?.coordinate;
-    const previousCoordinate = instructions[currentStepIndex - 1]?.coordinate;
-    let bearing: number | undefined;
-    if (nextCoordinate) bearing = bearingBetween(target, nextCoordinate);
-    else if (previousCoordinate) bearing = bearingBetween(previousCoordinate, target);
-
-    mapView.Camera.animateTo({ center: target, zoomLevel: 2500, bearing }, { duration: 600 });
-
-    // Sync the active row + progress bar to the current step.
-    listEl.querySelectorAll(".step").forEach((el, i) => {
-      el.classList.toggle("active", i === currentStepIndex);
-      if (i === currentStepIndex) el.scrollIntoView({ block: "nearest" });
-    });
-    progressDotsEl.querySelectorAll(".progress-dot").forEach((el, i) => {
-      el.classList.toggle("done", i < currentStepIndex);
-      el.classList.toggle("current", i === currentStepIndex);
-    });
-    const total = Math.max(instructions.length - 1, 1);
-    progressFillEl.style.setProperty("--progress", `${(currentStepIndex / total) * 100}%`);
-
-    prevBtn.disabled = currentStepIndex === 0;
-    nextBtn.disabled = currentStepIndex === instructions.length - 1;
-  }
-
-  function renderDirections(directions: Directions, toSpace: Space, fromSpace: Space) {
-    activeDirections = directions;
-    highlightedStepIndex = -1;
-    highlightAnimationToken++; // cancel any animation left over from a previous route
-    const instructions = directions.instructions;
-
-    destinationNameEl.textContent = toSpace.name;
-    totalTimeEl.textContent = `${formatDuration(directions.distance)} total`;
-    currentLocationEl.textContent = fromSpace.name;
-
-    listEl.innerHTML = instructions
-      .map((instruction, i) => {
-        const meters = instruction.distance;
-        return `
-          <div class="step" data-index="${i}">
-            <div class="step-icon">${iconFor(instruction)}</div>
-            <div class="step-text">
-              ${describeInstruction(instruction, fromSpace.name)}
-              <div class="step-time">${meters > 0 ? formatDuration(meters) : ""}</div>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-
-    listEl.querySelectorAll<HTMLElement>(".step").forEach((el) => {
-      el.addEventListener("click", () => goToStep(Number(el.dataset.index)));
-    });
-
-    // One dot per instruction, matching the Battersea-style stepper.
-    progressDotsEl.innerHTML = instructions.map(() => `<div class="progress-dot"></div>`).join("");
-
-    searchPanel.hidden = true;
-    directionsPanel.hidden = false;
-    floorSelectorEl.hidden = true;
-    goToStep(0);
-  }
-
-  goBtn.addEventListener("click", async () => {
-    const fromSpace = mapData.getById("space", fromSelect.value);
-    const toSpace = mapData.getById("space", toSelect.value);
-    if (!fromSpace || !toSpace || fromSpace.id === toSpace.id) return;
-
-    goBtn.disabled = true;
-    try {
-      const directions = await mapData.getDirections(fromSpace, toSpace);
-      if (directions) {
-        mapView.Navigation.draw(directions);
-        renderDirections(directions, toSpace, fromSpace);
-      }
-    } catch (err) {
-      console.error("Failed to get directions:", err);
-    } finally {
-      goBtn.disabled = false;
-    }
-  });
-
-  backBtn.addEventListener("click", showSearchView);
-  prevBtn.addEventListener("click", () => goToStep(currentStepIndex - 1));
-  nextBtn.addEventListener("click", () => goToStep(currentStepIndex + 1));
-
-  // Expose for debugging in the browser console
-  (window as any).mapView = mapView;
-  (window as any).mapData = mapData;
 }
 
-init().catch((err) => console.error("Failed to load map:", err));
+function setup(mapData: MapData, mapView: MapView) {
+  const places = new PlaceIndex(mapData);
+  const camera = new CameraController(mapView);
+  const route = new RouteLayer(mapView);
+  const mobileQuery = window.matchMedia(MOBILE_QUERY);
+  const isMobile = () => mobileQuery.matches;
+
+  // Map labels keep the data's emoji names; rooms become clickable.
+  const labels = new Map<string, Label>();
+  for (const place of places.places) {
+    if (place.kind !== "space") continue;
+    const space = place.target as Space;
+    labels.set(place.id, mapView.Labels.add(space, place.name));
+    mapView.updateState(space, { interactive: true, hoverColor: "#DCE5FF" });
+  }
+
+  mountFloorSelector(el.floors, mapView);
+  mountMapControls(el.controls, camera);
+
+  // ---- Routes ------------------------------------------------------------
+  let routeCache: RouteResult | null = null;
+  let lastStep = 0;
+
+  async function startRoute(fromId: string, toId: string) {
+    const s = getState();
+    if (s.view !== "editing") return;
+    const from = places.get(fromId);
+    const to = places.get(toId);
+    if (!from || !to) return;
+    if (fromId === toId) return replace({ ...s, error: "Pick two different places.", busy: false });
+
+    replace({ ...s, error: null, busy: true });
+    try {
+      const directions = await mapData.getDirections(from.target, to.target);
+      const now = getState();
+      if (now.view !== "editing" || now.fromId !== fromId || now.toId !== toId) return; // user moved on
+      if (!directions) return replace({ ...now, busy: false, error: "No route found between these places." });
+
+      const instructions: RawInstruction[] = directions.instructions.map((instruction) => ({
+        type: instruction.action.type as RawInstructionType,
+        bearing: instruction.action.bearing,
+        direction: instruction.action.direction,
+        connectionType: instruction.action.connection?.type,
+        toFloorId: instruction.action.toFloor?.id,
+        distance: instruction.distance,
+        lat: instruction.coordinate.latitude,
+        lng: instruction.coordinate.longitude,
+        floorId: instruction.coordinate.floorId ?? "",
+      }));
+      const steps = buildSteps({
+        instructions,
+        fromName: from.name,
+        toName: to.name,
+        departureId: from.id,
+        floorNames: places.floorNames(),
+        landmarks: places.landmarks(),
+      });
+      routeCache = { key: `${fromId}>${toId}`, fromId, toId, directions, steps };
+      lastStep = 0;
+      replace({ ...now, busy: false }); // Back from directions returns to a settled editor
+      navigate({ view: "directions", fromId, toId, step: 0 });
+    } catch (error) {
+      console.error("getDirections failed:", error);
+      const now = getState();
+      if (now.view === "editing") replace({ ...now, busy: false, error: "Couldn't work out a route. Please try again." });
+    }
+  }
+
+  // ---- UI ----------------------------------------------------------------
+  const ctx: UIContext = {
+    places,
+    route: () => routeCache,
+    isMobile,
+    navigate,
+    replace,
+    back,
+    close: () => reset(HOME),
+    pickPlace(placeId) {
+      const s = getState();
+      if (s.view !== "editing") return;
+      const next = { ...s, query: "", error: null, ...(s.active === "from" ? { fromId: placeId } : { toId: placeId }) };
+      const other = s.active === "from" ? "to" : "from";
+      if (!(other === "from" ? next.fromId : next.toId)) return replace({ ...next, active: other });
+      replace(next);
+      void startRoute(next.fromId!, next.toId!);
+    },
+    swapEnds() {
+      const s = getState();
+      if (s.view !== "editing") return;
+      const next = { ...s, fromId: s.toId, toId: s.fromId, query: "", error: null };
+      replace(next);
+      if (next.fromId && next.toId) void startRoute(next.fromId, next.toId);
+    },
+    goToStep(step) {
+      const s = getState();
+      if (s.view !== "directions" || !routeCache) return;
+      if (step === null) {
+        if (s.step !== null) lastStep = s.step;
+        return replace({ ...s, step: null });
+      }
+      replace({ ...s, step: Math.max(0, Math.min(routeCache.steps.length - 1, step)) });
+    },
+    resumeSteps() {
+      ctx.goToStep(lastStep);
+    },
+    setSheetExpanded(expanded) {
+      setExpanded(el.panel, expanded);
+    },
+  };
+
+  let mounted: ViewModule<AppState> | null = null;
+
+  function moduleFor(state: AppState): ViewModule<AppState> {
+    const module =
+      state.view === "browse"
+        ? browseCard
+        : state.view === "location"
+          ? locationCard
+          : state.view === "editing"
+            ? directionsEditor
+            : isMobile()
+              ? directionsMobile
+              : directionsPanel;
+    return module as ViewModule<AppState>;
+  }
+
+  function renderUI(next: AppState, prev: AppState, force = false) {
+    const module = moduleFor(next);
+    if (!force && module === mounted && prev.view === next.view && module.patch) {
+      module.patch(el.panel, el.banner, prev, next, ctx);
+    } else {
+      el.banner.hidden = true;
+      el.banner.innerHTML = "";
+      el.banner.onclick = null;
+      el.panel.hidden = false;
+      el.panel.dataset.view = next.view;
+      module.render(el.panel, el.banner, next, ctx);
+      mounted = module;
+    }
+  }
+
+  // ---- Map reactions -----------------------------------------------------
+  let mapToken = 0;
+  let drawnKey: string | null = null;
+  let locationMarker: Marker | null = null;
+  const hiddenLabels = new Set<string>();
+
+  function setLabelHidden(placeId: string, hidden: boolean) {
+    const label = labels.get(placeId);
+    if (!label || hiddenLabels.has(placeId) === hidden) return;
+    mapView.updateState(label, { enabled: !hidden });
+    if (hidden) hiddenLabels.add(placeId);
+    else hiddenLabels.delete(placeId);
+  }
+
+  function showAllLabels() {
+    [...hiddenLabels].forEach((id) => setLabelHidden(id, false));
+  }
+
+  function clearLocationMarker() {
+    if (locationMarker) mapView.Markers.remove(locationMarker);
+    locationMarker = null;
+  }
+
+  // The destination-style marker for a selected place replaces its label.
+  function markPlace(place: Place, floorId: string) {
+    clearLocationMarker();
+    showAllLabels();
+    setLabelHidden(place.id, true);
+    locationMarker = mapView.Markers.add(
+      places.anchor(place, floorId),
+      destinationMarkerHtml(place.displayName, placeIconName(place)),
+      { rank: "always-visible", placement: "center" },
+    );
+  }
+
+  function clearRoute() {
+    route.clear();
+    drawnKey = null;
+  }
+
+  function setFloor(floorId: string | undefined) {
+    if (floorId && floorId !== mapView.currentFloor?.id) mapView.setFloor(floorId);
+  }
+
+  // Leave room for whatever UI is on screen (spec §6), measured live.
+  function refreshOffsets() {
+    const pad = 16;
+    const floorsRect = el.floors.hidden ? null : el.floors.getBoundingClientRect();
+    const right = floorsRect && floorsRect.width ? window.innerWidth - floorsRect.left + pad : pad;
+    if (isMobile()) {
+      const top = el.banner.hidden ? pad : el.banner.getBoundingClientRect().bottom + 8;
+      const bottom = el.panel.hidden ? pad : window.innerHeight - el.panel.getBoundingClientRect().top + 8;
+      camera.setOffsets({ top, bottom, left: pad, right: Math.min(right, 72) });
+    } else {
+      const left = el.panel.hidden ? pad : el.panel.getBoundingClientRect().right + pad;
+      camera.setOffsets({ top: pad, bottom: pad, left, right });
+    }
+  }
+
+  function coordinatesOnFloor(coordinates: Coordinate[], floorId: string | undefined) {
+    return coordinates.filter((c) => c.floorId === floorId);
+  }
+
+  // The slice of the route between two instruction points, for camera framing.
+  function legCoordinates(all: Coordinate[], from: Coordinate, to: Coordinate): Coordinate[] {
+    const nearest = (target: Coordinate) => {
+      let best = 0;
+      let bestDistance = Infinity;
+      all.forEach((c, i) => {
+        if (c.floorId !== target.floorId) return;
+        const d = distanceM({ lat: c.latitude, lng: c.longitude }, { lat: target.latitude, lng: target.longitude });
+        if (d < bestDistance) {
+          best = i;
+          bestDistance = d;
+        }
+      });
+      return best;
+    };
+    const a = nearest(from);
+    const b = nearest(to);
+    const slice = all.slice(Math.min(a, b), Math.max(a, b) + 1).filter((c) => c.floorId === from.floorId);
+    return slice.length >= 2 ? slice : [from, to];
+  }
+
+  function applyStep(r: RouteResult, step: number | null) {
+    const d = r.directions;
+    if (step === null) {
+      route.clearHighlight();
+      const floorId = d.instructions[0]?.coordinate.floorId;
+      setFloor(floorId);
+      return camera.floorRoute(coordinatesOnFloor(d.coordinates, floorId));
+    }
+    const s = r.steps[step];
+    if (s.kind === "take-connection") {
+      // Battersea's stairs/escalator step: jump to the next floor and show
+      // its whole stretch of the route.
+      route.clearHighlight();
+      setFloor(s.toFloorId);
+      return camera.floorRoute(coordinatesOnFloor(d.coordinates, s.toFloorId));
+    }
+    // On arrival, keep the final approach in view.
+    const leg = s.kind === "arrive" && step > 0 ? r.steps[step - 1] : s;
+    const from = d.instructions[leg.rawIndex].coordinate;
+    const to = d.instructions[leg.legEndIndex].coordinate;
+    setFloor(leg.floorId);
+    route.highlight(from, to);
+    return camera.leg(legCoordinates(d.coordinates, from, to));
+  }
+
+  async function applyMapState(next: AppState, prev: AppState) {
+    const token = ++mapToken;
+    refreshOffsets();
+    switch (next.view) {
+      case "browse":
+        if (prev.view !== "browse" || prev === next) {
+          clearRoute();
+          clearLocationMarker();
+          showAllLabels();
+          await camera.overview();
+        }
+        return;
+      case "location": {
+        const place = places.get(next.placeId);
+        if (!place || (prev.view === "location" && prev.placeId === next.placeId)) return;
+        clearRoute();
+        const floorId = place.floorIds.includes(mapView.currentFloor?.id ?? "") ? mapView.currentFloor.id : place.floorId;
+        setFloor(floorId);
+        markPlace(place, floorId);
+        await camera.location(place.kind === "space" ? (place.target as Space) : places.anchor(place, floorId));
+        return;
+      }
+      case "editing": {
+        if (prev.view === "directions") clearRoute();
+        const to = places.get(next.toId);
+        if (to) markPlace(to, to.floorIds.includes(mapView.currentFloor?.id ?? "") ? mapView.currentFloor.id : to.floorId);
+        else {
+          clearLocationMarker();
+          showAllLabels();
+        }
+        return;
+      }
+      case "directions": {
+        const r = routeCache;
+        if (!r) return;
+        if (drawnKey !== r.key) {
+          clearLocationMarker();
+          showAllLabels();
+          const to = places.get(r.toId);
+          if (to) setLabelHidden(to.id, true);
+          await route.draw(r.directions, { name: to?.displayName ?? "Destination", icon: to ? placeIconName(to) : "pin" });
+          drawnKey = r.key;
+        }
+        if (token !== mapToken) return; // a newer state already took over
+        if (prev.view !== "directions" || prev.step !== next.step || prev !== next) await applyStep(r, next.step);
+        return;
+      }
+    }
+  }
+
+  subscribe((next, prev) => renderUI(next, prev));
+  subscribe((next, prev) => void applyMapState(next, prev));
+
+  // ---- Input -------------------------------------------------------------
+  mapView.on("click", (event) => {
+    const space = event.spaces?.find((s) => places.get(s.id));
+    if (!space) return;
+    const s = getState();
+    if (s.view === "browse") navigate({ view: "location", placeId: space.id });
+    else if (s.view === "location") replace({ view: "location", placeId: space.id });
+    else if (s.view === "editing") ctx.pickPlace(space.id);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.matches("input, textarea")) {
+      if (event.key === "Escape") target.blur();
+      return;
+    }
+    const s = getState();
+    if (s.view === "directions" && s.step !== null && routeCache) {
+      if (event.key === "ArrowRight") return ctx.goToStep(s.step + 1);
+      if (event.key === "ArrowLeft") return ctx.goToStep(s.step - 1);
+    }
+    if (event.key === "Escape" && s.view !== "browse") back();
+  });
+
+  // Layout flips (rotate, resize across the breakpoint) rebuild the panel.
+  mobileQuery.addEventListener("change", () => {
+    const s = getState();
+    renderUI(s, s, true);
+    void applyMapState(s, s);
+  });
+
+  let offsetsFrame = 0;
+  const observer = new ResizeObserver(() => {
+    cancelAnimationFrame(offsetsFrame);
+    offsetsFrame = requestAnimationFrame(refreshOffsets);
+  });
+  observer.observe(el.panel);
+  observer.observe(el.banner);
+  initSheet(el.panel, isMobile, refreshOffsets);
+
+  const initial = getState();
+  renderUI(initial, initial, true);
+  void applyMapState(initial, initial);
+
+  // Handy when demoing from the console.
+  Object.assign(window, { mapView, mapData });
+}
+
+void start();

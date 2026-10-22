@@ -15,6 +15,6 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
-    "@mappedin/mappedin-js": "^6.27.0"
+    "@mappedin/mappedin-js": "^6.30.0"
   }
 }
