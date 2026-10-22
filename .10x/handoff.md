@@ -1,9 +1,8 @@
 # Handoff
 
-**From:** Discovery → **To:** Brainstorming (all roles)
+**From:** CTO + PM (Phase 1) → **To:** Architect + Staff Engineer (Phase 2)
 
-The code reverse-engineering and the reference study are done. Start with:
-1. `specs/2026-10-22-battersea-reference-teardown.md`, which has measured design values and the observed camera and route behaviour.
-2. `decisions/architect/_index.md`, which describes the current structure and two defects (`zoomLevel: 2500`, and a highlight model that is the reverse of the reference).
-
-Open questions for the user are kept in the brainstorming conversation.
+- The user approved the full spec, `specs/2026-10-22-battersea-wayfinding-ux-design.md`, with both increments.
+- Build vs buy is settled: extend the vanilla TS app; Vitest as a dev-only addition.
+- The Phase 2 ADRs need to cover: (1) the module and view-state architecture, (2) the route highlight and camera model, and (3) the step-merging algorithm, since it's the trickiest logic.
+- The real-data fixture for the reference route was captured during planning research. It goes in `src/directions/__fixtures__/` at implementation time.
