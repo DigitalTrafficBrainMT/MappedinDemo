@@ -1,8 +1,8 @@
 # Handoff
 
-**From:** CTO + PM (Phase 1) → **To:** Architect + Staff Engineer (Phase 2)
+**From:** Architect + Staff Engineer (Phase 2) → **To:** EM + Senior Engineer (Phase 3)
 
-- The user approved the full spec, `specs/2026-10-22-battersea-wayfinding-ux-design.md`, with both increments.
-- Build vs buy is settled: extend the vanilla TS app; Vitest as a dev-only addition.
-- The Phase 2 ADRs need to cover: (1) the module and view-state architecture, (2) the route highlight and camera model, and (3) the step-merging algorithm, since it's the trickiest logic.
-- The real-data fixture for the reference route was captured during planning research. It goes in `src/directions/__fixtures__/` at implementation time.
+- ADRs: **001** (vanilla modules and view-state store), **002** (current-leg highlight with a fixed-bearing `focusOn` camera), **003** (step merging in a pure module).
+- The component table and data flow are in `decisions/architect/battersea-wayfinding-ux.md`.
+- The coding standards are in `decisions/staff-engineer/battersea-wayfinding-ux.md`. Above all: escape data, no SDK imports in pure modules, tokens only in CSS.
+- Plan the order so the pure modules plus tests come first: they de-risk the wording, and the UI depends on them.

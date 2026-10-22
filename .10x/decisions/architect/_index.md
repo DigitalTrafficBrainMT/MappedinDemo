@@ -1,13 +1,13 @@
 # Architect — index
 
-## Current structure [DISCOVERED]
-- **One file, `src/main.ts` (~700 lines)**, holds everything: injected CSS strings, DOM templates (`innerHTML`), map bootstrap, the floor selector, the search panel, the directions panel and the step camera.
-- Flow: `getMapData(options)` → `show3dMap(#map)` → label every named space → wire the UI.
-- View state is two panels toggled with `hidden` (`#search-panel` ↔ `#directions-panel`), plus `#floor-selector`.
-- Route rendering: `Navigation.draw(directions)`. The "walked so far" highlight is a hand-rolled rAF tween that re-issues `highlightPathSection(routeStart, interpolatedPoint)` on every frame.
-- Step camera: `Camera.animateTo({ center, zoomLevel: 2500, bearing })`, with heading-up bearing taken from the vector to the next instruction.
-- No routing, no URL state, no tests.
+## System shape (as of 2026-10-22)
+- Single-page vanilla TS app. One view-state store drives the panels and the map reactions (ADR-001).
+- Map rules: highlight only the current leg; the camera frames extents with a fixed venue bearing (ADR-002).
+- Step wording comes from a pure merging module (ADR-003).
 
-## Known defects found during discovery
-- `zoomLevel: 2500` is not a valid Mercator zoom (the map defaults to about 19.4), so it silently clamps to max zoom on every step.
-- The cumulative highlight is the **opposite** of the reference, which highlights only the current leg (see the teardown spec).
+## Known defects found during discovery (fixed by battersea-wayfinding-ux)
+- `zoomLevel: 2500` invalid camera zoom → replaced by `focusOn` extents.
+- Highlight model the reverse of the reference → ADR-002.
+
+## Active features
+- `battersea-wayfinding-ux`: see `battersea-wayfinding-ux.md`

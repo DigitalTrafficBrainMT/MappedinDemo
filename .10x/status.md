@@ -1,6 +1,6 @@
 # Status
 
-**Phase:** Phase 1 Strategy Complete → Phase 2 Design
+**Phase:** Phase 2 Design Complete → Phase 3 Planning
 **Active feature:** `battersea-wayfinding-ux`
 **Updated:** 2026-10-22
 
@@ -13,7 +13,7 @@
 - [x] Brainstorm scope and key decisions with the user
 - [x] Design spec written and **approved by the user** (`specs/2026-10-22-battersea-wayfinding-ux-design.md`)
 - [x] Phase 1 Strategy: CTO and PM decisions written
-- [ ] Phase 2 Design: ADRs, architect, staff engineer
+- [x] Phase 2 Design: ADR-001/002/003, architect and staff engineer decisions
 - [ ] Phase 3 Planning
 - [ ] Phase 4 Implementation (increment 1, then increment 2)
 - [ ] Phase 5 Verification

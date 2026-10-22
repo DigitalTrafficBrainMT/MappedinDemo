@@ -1,7 +1,10 @@
 # Staff Engineer — index
 
-## Conventions observed [DISCOVERED]
-- Vanilla TS with strict-ish tsconfig: `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax` (so type-only imports need `import type`), `erasableSyntaxOnly`.
-- CSS is injected from TS via `<style>` elements; there's no CSS file in use. `src/style.css`, `src/counter.ts` and `src/assets/*` are leftover Vite scaffold and unused.
-- Comment style: short "why" comments above non-obvious SDK workarounds.
-- Verification so far: `npx tsc --noEmit` plus manual checks in the browser. No test runner.
+## Conventions
+- Vanilla TS with `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax` (use `import type`) and `erasableSyntaxOnly` (no enums or parameter properties).
+- Styles live in `src/styles.css` with tokens as CSS custom properties. No CSS-in-TS. *(Changed 2026-10-22; previously injected strings.)*
+- Templates with `esc()` for data, delegated `data-action` click handling, and pure logic isolated for Vitest.
+- Gates: `npx tsc --noEmit`, `npx vitest run`, `npm run build`, and browser QA.
+
+## Active features
+- `battersea-wayfinding-ux`: see `battersea-wayfinding-ux.md`
