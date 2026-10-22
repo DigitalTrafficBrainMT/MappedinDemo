@@ -1,6 +1,6 @@
 # Status
 
-**Phase:** Phase 4 Implementation Complete → Phase 5 Verification
+**Phase:** Phase 5 Verification Complete → Phase 6 Delivery
 **Active feature:** `battersea-wayfinding-ux`
 **Updated:** 2026-10-22
 
@@ -16,7 +16,7 @@
 - [x] Phase 2 Design: ADR-001/002/003, architect and staff engineer decisions
 - [x] Phase 3 Planning: T1–T18 (see `decisions/engineering-manager/battersea-wayfinding-ux.md`)
 - [x] Phase 4 Implementation: both increments built; see `decisions/sde/battersea-wayfinding-ux.md`
-- [ ] Phase 5 Verification
+- [x] Phase 5 Verification: QA PASS (35 tests, 8 bugs fixed); Security PASS for the demo (Google Fonts removed, Vite advisory fixed)
 - [ ] Phase 6 Delivery
 
 ## Blockers / notes

@@ -1,16 +1,10 @@
 # Handoff
 
-**From:** SDE (Phase 4) → **To:** QA + Security (Phase 5)
+**From:** QA + Security (Phase 5) → **To:** DevOps + SRE (Phase 6)
 
-Built: everything in spec §12 for both increments. Commits `f06eb9b`…`ae57bb5`.
-
-**For QA:**
-- The browser checks were run during implementation (desktop 1280×800 and phone 375×812). Formalise them in the QA report and re-check the acceptance list against them.
-- Hot spots: step wording on other routes, editor focus handling, the phone sheet gestures, layout flips.
-
-**For Security:**
-- All templates in `src/ui/*` and `src/map/markers.ts` interpolate data. Verify every map/user value goes through `esc()` or `textContent`.
-- The keys are in `config.ts` (public demo keys).
-- `npm audit` reports 0 after `audit fix` (Vite 8.3.5).
-
-Known debt is listed in `decisions/sde/battersea-wayfinding-ux.md`.
+- **Release readiness:** ready for demo use.
+  - QA: `reviews/2026-10-22-qa-report.md`.
+  - Security: `reviews/2026-10-22-security-review.md`.
+- **Build:** `npm run build` produces a static `dist/`. It contains a 1.6 MB SDK chunk (445 kB gzip), which is expected.
+- **Blockers for going public:** none for the demo keys. The GitHub remote push still hasn't landed (auth on the user's side), and no host has been chosen yet.
+- **Production caveats:** see security F4 (credentials) and F5 (CSP).
