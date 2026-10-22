@@ -1172,6 +1172,12 @@ button {
     transform: translateY(-50%);
   }
 
+  /* An expanded sheet covers the map, so the floor pills would only sit on
+     top of the list. */
+  #panel.is-expanded:not([hidden]) ~ .floor-selector {
+    display: none;
+  }
+
   .map-controls {
     display: none;
   }

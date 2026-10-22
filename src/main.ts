@@ -117,8 +117,8 @@ function setup(mapData: MapData, mapView: MapView) {
       }));
       const steps = buildSteps({
         instructions,
-        fromName: from.name,
-        toName: to.name,
+        fromName: from.displayName,
+        toName: to.displayName,
         departureId: from.id,
         floorNames: places.floorNames(),
         landmarks: places.landmarks(),
@@ -257,9 +257,12 @@ function setup(mapData: MapData, mapView: MapView) {
     const floorsRect = el.floors.hidden ? null : el.floors.getBoundingClientRect();
     const right = floorsRect && floorsRect.width ? window.innerWidth - floorsRect.left + pad : pad;
     if (isMobile()) {
+      // Wider side margin on phones: framing is by room centres, so walls and
+      // labels need room to spill outward on a 375px screen.
+      const side = 32;
       const top = el.banner.hidden ? pad : el.banner.getBoundingClientRect().bottom + 8;
       const bottom = el.panel.hidden ? pad : window.innerHeight - el.panel.getBoundingClientRect().top + 8;
-      camera.setOffsets({ top, bottom, left: pad, right: Math.min(right, 72) });
+      camera.setOffsets({ top, bottom, left: side, right: Math.max(side, Math.min(right, 72)) });
     } else {
       const left = el.panel.hidden ? pad : el.panel.getBoundingClientRect().right + pad;
       camera.setOffsets({ top: pad, bottom: pad, left, right });
@@ -380,8 +383,8 @@ function setup(mapData: MapData, mapView: MapView) {
   });
 
   document.addEventListener("keydown", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.matches("input, textarea")) {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.matches("input, textarea")) {
       if (event.key === "Escape") target.blur();
       return;
     }
@@ -407,7 +410,15 @@ function setup(mapData: MapData, mapView: MapView) {
   });
   observer.observe(el.panel);
   observer.observe(el.banner);
-  initSheet(el.panel, isMobile, refreshOffsets);
+  // In directions, the sheet's two heights are the two phone modes: pulling it
+  // up opens the Steps list, pushing it down returns to turn-by-turn.
+  initSheet(el.panel, isMobile, () => {
+    const s = getState();
+    const expanded = el.panel.classList.contains("is-expanded");
+    if (s.view === "directions" && expanded && s.step !== null) return ctx.goToStep(null);
+    if (s.view === "directions" && !expanded && s.step === null) return ctx.resumeSteps();
+    refreshOffsets();
+  });
 
   const initial = getState();
   renderUI(initial, initial, true);

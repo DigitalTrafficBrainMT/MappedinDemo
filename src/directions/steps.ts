@@ -185,10 +185,14 @@ export function buildSteps(input: BuildStepsInput): Step[] {
     const current = ins[i];
 
     if (current.type === "Departure" || current.type === "ExitConnection") {
+      // Starting at a lift/stairs: the SDK puts an ExitConnection straight
+      // after Departure. Fold it into the departure rather than saying
+      // "Exit the lift" before you've gone anywhere.
+      const anchor = current.type === "Departure" && ins[i + 1]?.type === "ExitConnection" ? i + 1 : i;
       // The SDK's first turn after a door or stairwell is measured against
       // the door/stair orientation, which we can't know — so trust its bearing.
-      const end = clusterEnd(i);
-      const first = end > i ? turnFromSdkBearing(ins[i + 1].bearing) : null;
+      const end = clusterEnd(anchor);
+      const first = end > anchor ? turnFromSdkBearing(ins[anchor + 1].bearing) : null;
       if (current.type === "Departure") {
         drafts.push({ kind: "depart", side: first?.side, rawIndex: i, floorId: current.floorId, text: departText(from, first) });
       } else {
@@ -208,6 +212,12 @@ export function buildSteps(input: BuildStepsInput): Step[] {
     }
 
     if (current.type === "TakeConnection") {
+      // Routing *to* a lift/stairs ends with a TakeConnection then Arrival;
+      // "Take the lift" there would be wrong — you've arrived at it.
+      if (ins[i + 1]?.type === "Arrival") {
+        i++;
+        continue;
+      }
       const label = connectionLabel(current.connectionType);
       const direction = current.direction === "up" || current.direction === "down" ? current.direction : undefined;
       const floorName = current.toFloorId ? input.floorNames[current.toFloorId] : undefined;

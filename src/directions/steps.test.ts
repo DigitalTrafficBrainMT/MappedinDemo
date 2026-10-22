@@ -127,6 +127,34 @@ describe("buildSteps rules", () => {
     expect(steps.map((s) => s.text)).toEqual(["Leave Lobby", "Take the lift up to Level 2", "Exit the lift", "Arrive at Kitchen"]);
   });
 
+  it("doesn't say 'Take the lift' when the lift is the destination", () => {
+    const steps = buildSteps({
+      ...base,
+      toName: "Lift 1",
+      instructions: [
+        at(p0, { type: "Departure", distance: 0 }),
+        at(p1, { bearing: "Right" }),
+        at(p2, { type: "TakeConnection", connectionType: "elevator", distance: 1 }),
+        at(p2, { type: "Arrival", distance: 0 }),
+      ],
+    });
+    expect(steps.map((s) => s.text)).toEqual(["Leave Lobby", "Turn right", "Arrive at Lift 1"]);
+  });
+
+  it("doesn't say 'Exit the lift' when the route starts at the lift", () => {
+    const steps = buildSteps({
+      ...base,
+      fromName: "Lift 1",
+      instructions: [
+        at(p0, { type: "Departure", distance: 0 }),
+        at(p0, { type: "ExitConnection", connectionType: "elevator", distance: 0 }),
+        at(p1, { bearing: "Right" }),
+        at(p2, { type: "Arrival" }),
+      ],
+    });
+    expect(steps.map((s) => s.text)).toEqual(["Leave Lift 1", "Turn right", "Arrive at Kitchen"]);
+  });
+
   it("skips utility rooms and ambiguous duplicates as landmarks", () => {
     const near = (id: string, name: string) => ({ id, name, lat: p1.lat + 0.00001, lng: p1.lng, floorId: F });
     const make = (landmarks: BuildStepsInput["landmarks"]) =>
