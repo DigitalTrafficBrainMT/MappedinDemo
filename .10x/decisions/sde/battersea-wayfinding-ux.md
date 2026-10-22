@@ -30,6 +30,14 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
     - Phone side camera margin 32px.
     - Camera pitch and zoom presets kept at their spec defaults (`stepPitch` 10, `maxZoomLevel` 21) after visual review.
 
+13. **Route rendered as a flat ribbon** (user feedback after delivery, 2026-10-22). The SDK's default 3D tube showed side faces and angled seams, and the arrows on the highlighted leg were blue.
+    - Now `geometry: 'ribbon'`, a 1.1 m width that scales with zoom, CatmullRom corners (`tension` 0.25, `cornerRadius` 0.9), a darkened border and `accentColor` white. Same shape for the other floor's stretch.
+    - Above about 0.3, tension made S-shaped wobbles at doorways.
+    - **Route geometry was left unchanged** (default `greedy-los` simplification):
+      - `smoothing: false` zig-zagged along the raw corridor graph.
+      - `dp-optimal` took a 22% longer route with a diagonal shortcut.
+      - Keeping the default also keeps instructions, step wording and the fixture identical.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

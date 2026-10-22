@@ -28,6 +28,21 @@ export const LANDMARK_EXCLUDE = /storage|electrical|custodial/i;
 export const ROUTE_COLOR = "#4C82FF";
 export const ROUTE_ACTIVE_COLOR = "#1A2C9E";
 
+// Battersea draws the route as a flat line with straight runs and rounded
+// corners. The SDK's default "tube" geometry is 3D (visible side faces and
+// angled seams), so use a flat ribbon with CatmullRom corner smoothing.
+// Tension above ~0.3 overshoots where route points sit close together
+// (doorways), producing S-shaped wobbles.
+export const ROUTE_SHAPE = {
+  geometry: "ribbon" as const,
+  /** Metres, so the line scales with zoom like Battersea's. */
+  width: 1.1,
+  smoothing: { tension: 0.25, cornerRadius: 0.9 },
+  border: { enabled: true, color: "darken", width: 0.12 },
+};
+/** Direction arrows on the current leg. */
+export const ROUTE_ARROW_COLOR = "#FFFFFF";
+
 // Camera presets (spec §6). Bearing is always the venue's own default.
 export const CAMERA = {
   stepPitch: 10,

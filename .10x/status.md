@@ -19,6 +19,9 @@
 - [x] Phase 5 Verification: QA PASS (35 tests, 8 bugs fixed); Security PASS for the demo (Google Fonts removed, Vite advisory fixed)
 - [x] Phase 6 Delivery: production build verified, CI workflow added, deploy plan and runbook written
 
+## Post-delivery changes
+- 2026-10-22: route drawn as a flat ribbon with rounded corners and white arrows (user feedback). Gates green; verified on desktop and phone.
+
 ## Blockers / notes
 - The GitHub push to DigitalTrafficBrainMT has not landed (no upstream). The user is sorting out auth. CI and hosting both depend on it.
 - Production caveat: real venue credentials need the access-token flow (security F4).
