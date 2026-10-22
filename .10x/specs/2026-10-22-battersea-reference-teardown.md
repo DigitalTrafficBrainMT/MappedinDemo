@@ -87,6 +87,30 @@ Values marked *measured* were read from computed styles. Values marked *observed
   - Movement is animated and short, about 0.5–1 seconds.
 - **URL state**: `#/directions?to=…&from=…&textDirectionsVisible=true&instruction=N`, so routes and steps can be deep-linked and shared.
 
+## 5b. Mobile directions (375×812)
+
+The phone layout is turn-by-turn. It is not a smaller copy of the desktop card.
+- **Top banner**: a white sheet with 24px rounded bottom corners.
+  - First row: `← Close` on the left and `⋯` on the right.
+  - Below that, the **current instruction only**: a 48px rounded-square tile (`#F0F0F0`) holding the direction icon, then **bold instruction text** (about 17px) and a grey time line.
+- **Map** fills the middle. The camera is closer than on desktop. The floor selector sits on the right inside a white pill holder.
+- **Bottom sheet**: a white sheet with 24px rounded top corners. It holds the progress bar (start ring, connection icon, dots and an end pin, each in a small white circle), then "Directions to X" (grey), then the bold headline, then **two large arrow buttons**: `#F0F0F0`, about 44px tall, each taking half the width.
+- The **`⋯` menu**: Share, QR Code and **Steps**.
+- **Steps** switches to an **overview mode**:
+  - `instruction` is dropped from the URL.
+  - The header becomes `← Back`, "Directions to X" and "2 minutes total".
+  - The whole route is drawn in base blue, with no dark leg because no step is active.
+
+## 5c. Mobile browse (375×812)
+
+- The **bottom sheet** has a drag handle (a small grey bar) at the top.
+- Inside the sheet, in order:
+  - A **pill-shaped search field** with a `#F0F0F0` background, a magnifier icon and the placeholder "Search...".
+  - The tabs: `Categories` (outlined), `Popular` (filled dark when active) and `Amenities` (grey).
+  - The tile carousel. Each tile is a square bordered box with a large icon, then a bold name and a grey subtitle underneath.
+- The map sits above the sheet and opens on a city-level overview before moving in.
+- The floor selector is folded into a building button plus `⋯` on the right.
+
 ## 6. What the Office Demo map data can support
 
 | Battersea feature | Demo data | Notes |
