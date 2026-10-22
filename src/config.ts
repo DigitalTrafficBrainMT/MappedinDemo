@@ -41,6 +41,10 @@ export const ROUTE_SHAPE = {
   // Larger radii overlap on short legs and show seams in the bends.
   smoothing: { tension: 0.2, cornerRadius: 0.5 },
   border: { enabled: true, color: "darken", width: 0.12 },
+  // Parts of a path hidden behind walls/door frames are redrawn as a faint
+  // "x-ray" copy by default, which showed as light-blue lumps at corners.
+  // With one floor shown at a time there's nothing worth seeing through.
+  xray: { opacity: 0 },
 };
 /** Direction arrows on the current leg. */
 export const ROUTE_ARROW_COLOR = "#FFFFFF";

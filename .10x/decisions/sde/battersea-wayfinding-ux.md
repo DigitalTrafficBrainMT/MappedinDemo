@@ -43,6 +43,12 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
     - Navigation markers are synced to the current floor, using the documented `Navigation.markers` + `updateState({ enabled })` pattern. That removes the double stairs icon.
     - Corner smoothing changed to the documented defaults: tension 0.2, `cornerRadius` 0.5 (was 0.9, which overlapped on short legs). Width is now 1.2 m.
 
+15. **Own route rendering ("pipework")**, after user feedback that the line looked eaten, wasn't straight and lacked right-angle connectors:
+    - `directions/straighten.ts` (pure, tested) snaps each floor's route to straight runs along the building's dominant axes, absorbs jogs under 1.5 m, and meets runs at right-angle corners. The ends and stairs points are preserved.
+    - `map/route.ts` draws each floor as **non-overlapping pieces**: blue before, navy for the current leg (carried 1.2 m round its corners and cut square), blue after. Joins fall mid-run, so no colour peeks out from under another.
+    - **Mappedin `Navigation` is no longer used for drawing.** Its `pathOptions.visible: false` is ignored: it still drew a thin raw-geometry line underneath, which was the real cause of the light-blue slivers. `updateState(path, { visible })` doesn't hide paths either. Markers are now placed directly; floor sync uses our own list.
+    - `xray` opacity 0, so there's no faint copy behind walls.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

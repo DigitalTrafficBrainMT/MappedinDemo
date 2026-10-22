@@ -75,7 +75,7 @@ async function start() {
 function setup(mapData: MapData, mapView: MapView) {
   const places = new PlaceIndex(mapData);
   const camera = new CameraController(mapView);
-  const route = new RouteLayer(mapView);
+  const route = new RouteLayer(mapView, mapData);
   const mobileQuery = window.matchMedia(MOBILE_QUERY);
   const isMobile = () => mobileQuery.matches;
 
