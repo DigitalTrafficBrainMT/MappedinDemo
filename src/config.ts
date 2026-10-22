@@ -36,8 +36,10 @@ export const ROUTE_ACTIVE_COLOR = "#1A2C9E";
 export const ROUTE_SHAPE = {
   geometry: "ribbon" as const,
   /** Metres, so the line scales with zoom like Battersea's. */
-  width: 1.1,
-  smoothing: { tension: 0.25, cornerRadius: 0.9 },
+  width: 1.2,
+  // Mappedin's guidance: tension 0.1–0.3 with the default 0.5 m corner radius.
+  // Larger radii overlap on short legs and show seams in the bends.
+  smoothing: { tension: 0.2, cornerRadius: 0.5 },
   border: { enabled: true, color: "darken", width: 0.12 },
 };
 /** Direction arrows on the current leg. */

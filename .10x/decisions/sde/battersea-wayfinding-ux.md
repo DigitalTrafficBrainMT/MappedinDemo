@@ -38,6 +38,11 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
       - `dp-optimal` took a 22% longer route with a diagonal shortcut.
       - Keeping the default also keeps instructions, step wording and the fixture identical.
 
+14. **Following Mappedin's own guidance** (user feedback: duplicate stairs icon, messy line):
+    - `show3dMap(..., { multiFloorView: { enabled: false } })`. It's on by default and stacked the other floor and its route as a ghost underneath; Battersea shows one floor at a time.
+    - Navigation markers are synced to the current floor, using the documented `Navigation.markers` + `updateState({ enabled })` pattern. That removes the double stairs icon.
+    - Corner smoothing changed to the documented defaults: tension 0.2, `cornerRadius` 0.5 (was 0.9, which overlapped on short legs). Width is now 1.2 m.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

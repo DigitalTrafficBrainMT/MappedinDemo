@@ -41,6 +41,17 @@ export class RouteLayer {
   }
 
   /**
+   * Navigation markers are always-visible, so both ends of a staircase show
+   * at once (same spot, two floors). Mappedin's recommendation: enable only
+   * the markers on the floor being viewed. Call on every floor change.
+   */
+  syncMarkersToFloor(floorId: string | undefined) {
+    for (const { marker } of this.mapView.Navigation.markers) {
+      this.mapView.updateState(marker, { enabled: marker.coordinate.floorId === floorId });
+    }
+  }
+
+  /**
    * The SDK keeps a single highlighted section, so each call replaces the
    * previous one — exactly the "current leg only" behaviour we want.
    */

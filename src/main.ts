@@ -55,7 +55,10 @@ async function start() {
   try {
     await waitForNonZeroSize(el.map);
     const mapData = await getMapData(MAPPEDIN_OPTIONS);
-    const mapView = await show3dMap(el.map, mapData);
+    // Battersea shows one floor at a time. The SDK's default multi-floor view
+    // stacks the other floor (and its stretch of the route) semi-transparently
+    // underneath, which reads as a messy ghost line.
+    const mapView = await show3dMap(el.map, mapData, { multiFloorView: { enabled: false } });
     setup(mapData, mapView);
     el.overlay.hidden = true;
   } catch (error) {
@@ -364,6 +367,7 @@ function setup(mapData: MapData, mapView: MapView) {
           if (to) setLabelHidden(to.id, true);
           await route.draw(r.directions, { name: to?.displayName ?? "Destination", icon: to ? placeIconName(to) : "pin" });
           drawnKey = r.key;
+          route.syncMarkersToFloor(mapView.currentFloor?.id);
         }
         if (token !== mapToken) return; // a newer state already took over
         if (prev.view !== "directions" || prev.step !== next.step || prev !== next) await applyStep(r, next.step);
@@ -371,6 +375,8 @@ function setup(mapData: MapData, mapView: MapView) {
       }
     }
   }
+
+  mapView.on("floor-change", (event) => route.syncMarkersToFloor(event.floor.id));
 
   subscribe((next, prev) => renderUI(next, prev));
   subscribe((next, prev) => void applyMapState(next, prev));
