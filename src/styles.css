@@ -2,7 +2,7 @@
    reference teardown (.10x/specs/2026-10-22-battersea-reference-teardown.md). */
 
 :root {
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --ink: #001b21; /* headline, measured */
   --text: #343d43; /* instruction text, measured */
   --muted: #606060; /* subtitle, measured */

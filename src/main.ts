@@ -1,3 +1,6 @@
+// Inter is self-hosted (not Google Fonts) so visitors' IPs aren't sent to a
+// third party without consent — an EU/GDPR concern for a public demo.
+import "@fontsource-variable/inter";
 import "@mappedin/mappedin-js/lib/index.css";
 import "./styles.css";
 import { getMapData, show3dMap } from "@mappedin/mappedin-js";
