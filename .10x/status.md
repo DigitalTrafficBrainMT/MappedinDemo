@@ -1,6 +1,6 @@
 # Status
 
-**Phase:** Phase 5 Verification Complete → Phase 6 Delivery
+**Phase:** ✅ Delivery Complete: `battersea-wayfinding-ux` signed off for demo use
 **Active feature:** `battersea-wayfinding-ux`
 **Updated:** 2026-10-22
 
@@ -17,10 +17,11 @@
 - [x] Phase 3 Planning: T1–T18 (see `decisions/engineering-manager/battersea-wayfinding-ux.md`)
 - [x] Phase 4 Implementation: both increments built; see `decisions/sde/battersea-wayfinding-ux.md`
 - [x] Phase 5 Verification: QA PASS (35 tests, 8 bugs fixed); Security PASS for the demo (Google Fonts removed, Vite advisory fixed)
-- [ ] Phase 6 Delivery
+- [x] Phase 6 Delivery: production build verified, CI workflow added, deploy plan and runbook written
 
 ## Blockers / notes
-- The GitHub push to DigitalTrafficBrainMT has not landed (no upstream). The user is sorting out auth.
+- The GitHub push to DigitalTrafficBrainMT has not landed (no upstream). The user is sorting out auth. CI and hosting both depend on it.
+- Production caveat: real venue credentials need the access-token flow (security F4).
 
 ## Task progress
 - [x] T1
