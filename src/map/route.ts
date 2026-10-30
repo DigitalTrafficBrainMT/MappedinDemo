@@ -13,7 +13,7 @@
 // it always draws a line of its own underneath (visible:false is ignored).
 import type { Coordinate, Directions, MapData, MapView, Marker, Path, TDirectionInstruction } from "@mappedin/mappedin-js";
 import { CAMERA, ROUTE_ACTIVE_COLOR, ROUTE_ARROW_COLOR, ROUTE_COLOR, ROUTE_SHAPE } from "../config";
-import { cutPosition, gridAngle, lineLength, pointAt, project, straighten, type XY } from "../directions/straighten";
+import { cutPosition, gridAngle, lineLength, pointAt, project, slice, straighten, vertexArcs, type XY } from "../directions/straighten";
 import type { IconName } from "../ui/icons";
 import { motion } from "../util/motion";
 import { connectionMarkerHtml, departureMarkerHtml, destinationMarkerHtml } from "./markers";
@@ -23,8 +23,16 @@ const EARTH_M_PER_DEG = 111_320;
 const ROUND_CAP_M = 0.5;
 /** The current step is a touch wider than the rest, as on Battersea (+10%). */
 const ACTIVE_WIDTH_FACTOR = 1.1;
-/** Legs shorter than this get no arrows. */
-const MIN_ARROW_LEG_M = 2.6;
+/**
+ * Arrows are a shader texture placed purely by distance along a line, with no
+ * idea where the bends are (Battersea's identical shader has the same
+ * limitation). So we place them ourselves: arrow-only pieces on straight runs,
+ * clear of bends and of the leg's ends, in the same navy so nothing shows.
+ */
+const ARROW_CORNER_CLEARANCE_M = 1.0;
+const ARROW_END_CLEARANCE_M = 1.1;
+const ARROW_MIN_RUN_M = 1.4;
+const Z_ARROWS = 0.3; // above the line, so the piece never z-fights with it
 
 /** One floor's stretch of the route: its straightened line and its one path. */
 interface Stretch {
@@ -41,6 +49,7 @@ export class RouteLayer {
   private stretches: Stretch[] = [];
   private markers: Marker[] = [];
   private wallAngles = new Map<string, number>();
+  private arrowPaths: Path[] = [];
   /** Bumped on every highlight/clear; lets a deferred clear tell it's stale. */
   private highlightGeneration = 0;
   /** The running highlight animation, which re-applies colour as it ends. */
@@ -124,13 +133,41 @@ export class RouteLayer {
       {
         color: ROUTE_ACTIVE_COLOR,
         widthMultiplier: ACTIVE_WIDTH_FACTOR,
-        // A short leg (the last turn into a room) has no straight run to hold
-        // an arrow cleanly; the SDK squashes one onto the bend/door. Skip it.
-        displayArrowsOnPath: b - a >= MIN_ARROW_LEG_M,
+        displayArrowsOnPath: false, // arrows are drawn separately, off the bends
         animationDuration: motion(CAMERA.highlightDuration),
       },
     );
     this.pendingAnimation = started?.animation ?? null;
+    this.addArrows(stretch, a, b);
+  }
+
+  /** Arrow-only pieces on the straight parts of [a, b], away from every bend. */
+  private addArrows(stretch: Stretch, a: number, b: number) {
+    const corners = vertexArcs(stretch.line);
+    const bounds = [0, ...corners, stretch.length];
+    for (let i = 1; i < bounds.length; i++) {
+      const runStart = bounds[i - 1];
+      const runEnd = bounds[i];
+      const startsAtCorner = i > 1;
+      const endsAtCorner = i < bounds.length - 1;
+      // The part of this run inside the leg, minus clearance at corners and at
+      // the leg's own ends.
+      const from = Math.max(runStart + (startsAtCorner ? ARROW_CORNER_CLEARANCE_M : 0), a + ARROW_END_CLEARANCE_M);
+      const to = Math.min(runEnd - (endsAtCorner ? ARROW_CORNER_CLEARANCE_M : 0), b - ARROW_END_CLEARANCE_M);
+      if (to - from < ARROW_MIN_RUN_M) continue;
+      this.arrowPaths.push(
+        this.mapView.Paths.add(this.toCoordinates(stretch.floorId, slice(stretch.line, from, to)), {
+          ...ROUTE_SHAPE,
+          color: ROUTE_ACTIVE_COLOR,
+          accentColor: ROUTE_ARROW_COLOR,
+          width: ROUTE_SHAPE.width * ACTIVE_WIDTH_FACTOR,
+          displayArrowsOnPath: true,
+          endcapExtension: [0, 0],
+          verticalOffset: Z_ARROWS,
+          drawDuration: 0,
+        }),
+      );
+    }
   }
 
   /**
@@ -151,9 +188,13 @@ export class RouteLayer {
 
   private clearNow() {
     this.stretches.forEach((s) => this.mapView.Paths.clearHighlightedPathSection(s.path));
+    this.arrowPaths.forEach((path) => this.mapView.Paths.remove(path));
+    this.arrowPaths = [];
   }
 
   clear() {
+    this.arrowPaths.forEach((path) => this.mapView.Paths.remove(path));
+    this.arrowPaths = [];
     this.stretches.forEach((s) => this.mapView.Paths.remove(s.path));
     this.stretches = [];
     this.markers.forEach((marker) => this.mapView.Markers.remove(marker));

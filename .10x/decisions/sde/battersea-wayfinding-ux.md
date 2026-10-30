@@ -71,6 +71,8 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
 
 21. **Arrival matches Battersea** (observed live + their code): after the floor change they stop following each leg and frame the floor's whole route; on arrival the camera does not move, the highlight clears, and the destination bubble just stays (no pulse/drop animation — their SDK's pin-drop/bounce CSS isn't used for it). Verified: zoom/centre/pitch identical from the stairs step through arrival. Legs under 2.6 m carry no arrow. The progress bar now also collapses to start ring + end check on arrival. Bug found doing this: clicking Next quickly into the arrival left the previous leg navy, because the highlight animation re-applies its colour on its last frame after a clear; `clearHighlight` now waits for the running animation (generation-guarded).
 
+22. **Arrows never sit on a bend.** Battersea's arrows are a shader texture spaced by distance with no corner awareness, so a corner can squash one. We draw the highlight without SDK arrows and add white arrow-only overlay paths on straight runs only, at least 1.0 m from a corner and 1.1 m from the leg's ends (runs under 1.4 m get none). Checked on every step of Electrical Room → Huddle 103.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.
