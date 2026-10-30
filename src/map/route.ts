@@ -23,6 +23,8 @@ const EARTH_M_PER_DEG = 111_320;
 const ROUND_CAP_M = 0.5;
 /** The current step is a touch wider than the rest, as on Battersea (+10%). */
 const ACTIVE_WIDTH_FACTOR = 1.1;
+/** Legs shorter than this get no arrows. */
+const MIN_ARROW_LEG_M = 2.6;
 
 /** One floor's stretch of the route: its straightened line and its one path. */
 interface Stretch {
@@ -117,7 +119,9 @@ export class RouteLayer {
       {
         color: ROUTE_ACTIVE_COLOR,
         widthMultiplier: ACTIVE_WIDTH_FACTOR,
-        displayArrowsOnPath: true,
+        // A short leg (the last turn into a room) has no straight run to hold
+        // an arrow cleanly; the SDK squashes one onto the bend/door. Skip it.
+        displayArrowsOnPath: b - a >= MIN_ARROW_LEG_M,
         animationDuration: motion(CAMERA.highlightDuration),
       },
     );

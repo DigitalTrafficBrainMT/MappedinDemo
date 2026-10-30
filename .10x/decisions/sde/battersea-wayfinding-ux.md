@@ -69,6 +69,8 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
     - New pure `cutPosition`/`pointAt`/`vertexArcs` (tested): the renderer cuts a flat edge across the line, so a boundary is snapped to just before its nearest corner (0.9 m) and never within 0.7 m of a bend; short runs use their middle.
     - Known: a leg shorter than ~2.6 m (e.g. the last turn into a room) carries no arrow.
 
+21. **Arrival matches Battersea** (observed live + their code): after the floor change they stop following each leg and frame the floor's whole route; on arrival the camera does not move, the highlight clears, and the destination bubble just stays (no pulse/drop animation — their SDK's pin-drop/bounce CSS isn't used for it). Verified: zoom/centre/pitch identical from the stairs step through arrival. Legs under 2.6 m carry no arrow. Not copied: Battersea's progress bar drops the stairs icon on arrival.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

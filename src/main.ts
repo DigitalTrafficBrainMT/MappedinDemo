@@ -300,13 +300,25 @@ function setup(mapData: MapData, mapView: MapView) {
     return slice.length >= 2 ? slice : [from, to];
   }
 
+  // Which whole-floor framing the camera is already showing, so a step that
+  // wants the same view doesn't move it (Battersea's last steps don't either).
+  let framedKey: string | null = null;
+
+  function frameFloorRoute(r: RouteResult, floorId: string | undefined) {
+    const key = `floor:${r.key}:${floorId}`;
+    if (framedKey === key) return;
+    framedKey = key;
+    return camera.floorRoute(coordinatesOnFloor(r.directions.coordinates, floorId));
+  }
+
   function applyStep(r: RouteResult, step: number | null) {
     const d = r.directions;
+    const startFloorId = d.instructions[0]?.coordinate.floorId;
     if (step === null) {
       route.clearHighlight();
-      const floorId = d.instructions[0]?.coordinate.floorId;
-      setFloor(floorId);
-      return camera.floorRoute(coordinatesOnFloor(d.coordinates, floorId));
+      setFloor(startFloorId);
+      framedKey = null;
+      return frameFloorRoute(r, startFloorId);
     }
     const s = r.steps[step];
     if (s.kind === "take-connection") {
@@ -314,26 +326,31 @@ function setup(mapData: MapData, mapView: MapView) {
       // its whole stretch of the route.
       route.clearHighlight();
       setFloor(s.toFloorId);
-      return camera.floorRoute(coordinatesOnFloor(d.coordinates, s.toFloorId));
+      framedKey = null;
+      return frameFloorRoute(r, s.toFloorId);
     }
     if (s.kind === "arrive") {
-      // Arrived: the previous step's leg already ended here, so highlighting
-      // it again would repeat it. Clear the navy and frame the final approach.
+      // Battersea does nothing special on arrival: the highlight clears (the
+      // whole route goes back to one colour), the destination bubble stays,
+      // and the camera stays on the floor's route. No zoom, no pan.
       route.clearHighlight();
-      const last = d.instructions[s.rawIndex].coordinate;
-      const prev = d.instructions[Math.max(0, s.rawIndex - 1)].coordinate;
       setFloor(s.floorId);
-      return camera.leg(legCoordinates(d.coordinates, prev, last));
+      return frameFloorRoute(r, s.floorId);
     }
     const from = d.instructions[s.rawIndex].coordinate;
     const to = d.instructions[s.legEndIndex].coordinate;
     setFloor(s.floorId);
     route.highlight(from, to);
+    // After the floor change Battersea stops following each leg and frames
+    // the floor's whole route; before it, the camera follows the leg.
+    if (s.floorId !== startFloorId) return frameFloorRoute(r, s.floorId);
+    framedKey = null;
     return camera.leg(legCoordinates(d.coordinates, from, to));
   }
 
   async function applyMapState(next: AppState, prev: AppState) {
     const token = ++mapToken;
+    if (next.view !== "directions") framedKey = null;
     refreshOffsets();
     switch (next.view) {
       case "browse":
