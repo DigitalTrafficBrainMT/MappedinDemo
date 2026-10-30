@@ -16,16 +16,19 @@ export function headline(steps: Step[], current: number | null): string {
 
 export function progressHtml(steps: Step[], current: number | null): string {
   const fill = fillFraction(steps, current) * 100;
+  // Battersea: once you've arrived, the bar is just the start ring and the
+  // end check. The stairs icon and dots have done their job.
+  const arrived = current !== null && steps.length > 0 && current === steps.length - 1;
   const nodes = buildProgress(steps)
+    .filter((node) => !arrived || node.kind === "start" || node.kind === "end")
     .map((node) => {
       const done = current !== null && node.index < current;
       const isCurrent = current !== null && node.index === current;
       let glyph = "";
       // One marker per place: a stairs/lift icon for connections, and a single
-      // pin at the end. Only the arrival gets a check, so there are no
-      // doubled bubbles at the top.
+      // pin at the end that becomes a check on arrival.
       if (node.kind === "connection") glyph = icon(connectionIconName(node.connectionType));
-      if (node.kind === "end") glyph = icon("pin");
+      if (node.kind === "end") glyph = icon(arrived ? "check" : "pin");
       const state = `${done ? " is-done" : ""}${isCurrent ? " is-current" : ""}`;
       return `<span class="pnode pnode--${node.kind}${state}" style="--pos:${node.position * 100}%">${glyph}</span>`;
     })

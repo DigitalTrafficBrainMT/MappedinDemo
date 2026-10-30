@@ -41,6 +41,10 @@ export class RouteLayer {
   private stretches: Stretch[] = [];
   private markers: Marker[] = [];
   private wallAngles = new Map<string, number>();
+  /** Bumped on every highlight/clear; lets a deferred clear tell it's stale. */
+  private highlightGeneration = 0;
+  /** The running highlight animation, which re-applies colour as it ends. */
+  private pendingAnimation: Promise<unknown> | null = null;
 
   constructor(mapView: MapView, mapData: MapData) {
     this.mapView = mapView;
@@ -105,14 +109,15 @@ export class RouteLayer {
    * edge the renderer cuts always lands across a straight run.
    */
   highlight(from: Coordinate, to: Coordinate) {
-    this.clearHighlight();
+    this.highlightGeneration++;
+    this.clearNow();
     const stretch = this.stretches.find((s) => s.floorId === from.floorId && s.floorId === to.floorId);
     if (!stretch) return;
     let a = cutPosition(stretch.line, project(stretch.line, this.toXY(from)));
     let b = cutPosition(stretch.line, project(stretch.line, this.toXY(to)));
     if (a > b) [a, b] = [b, a];
     if (b - a < 0.3) return;
-    this.mapView.Paths.highlightPathSection(
+    const started = this.mapView.Paths.highlightPathSection(
       stretch.path,
       this.toCoordinates(stretch.floorId, [pointAt(stretch.line, a)])[0],
       this.toCoordinates(stretch.floorId, [pointAt(stretch.line, b)])[0],
@@ -125,9 +130,26 @@ export class RouteLayer {
         animationDuration: motion(CAMERA.highlightDuration),
       },
     );
+    this.pendingAnimation = started?.animation ?? null;
   }
 
+  /**
+   * Clear the highlight. If its animation is still running, wait for it to
+   * finish first: it re-applies the colour on its last frame, so an
+   * immediate clear (fast Next clicks into the arrival) got painted back over.
+   * A later highlight/clear supersedes this one.
+   */
   clearHighlight() {
+    const generation = ++this.highlightGeneration;
+    const animation = this.pendingAnimation;
+    this.clearNow();
+    if (!animation) return;
+    void animation.then(() => {
+      if (generation === this.highlightGeneration) this.clearNow();
+    });
+  }
+
+  private clearNow() {
     this.stretches.forEach((s) => this.mapView.Paths.clearHighlightedPathSection(s.path));
   }
 
