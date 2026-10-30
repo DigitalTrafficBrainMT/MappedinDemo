@@ -64,6 +64,11 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
 
 19. **Corner streaks were z-fighting.** Base, navy leg and arrows sat at 0.10/0.12/0.14 m above the floor, 2 cm apart, so the depth buffer flickered where their rounded corners overlapped. Layers now sit at 0.05/0.20/0.35 m (`Z_BASE`/`Z_LEG`/`Z_ARROWS`). The fade uses 10 thin steps so it reads as a gradient, not bands.
 
+20. **One line, restyled — not stacked** (after reading Mappedin's own Battersea app code, `cdn.mappedin.com/web2/release/mappedin-web.js`). Battersea never draws a second line: its highlight is `highlightPathSection`, a shader state that recolours a range of the *same* mesh (`highlightStart/EndFraction`, colour = base darkened 45%, width ×1.1 + 0.2, arrows on). We now do the same with `Paths.highlightPathSection` on our one straightened path per floor.
+    - Deleted: the stacked navy leg, arrow overlay paths, blue-to-navy fade pieces and the height constants. (The fade is impossible with this mechanism — segment state holds one range — and Battersea has none.) `route.ts` went from ~290 to ~205 lines.
+    - New pure `cutPosition`/`pointAt`/`vertexArcs` (tested): the renderer cuts a flat edge across the line, so a boundary is snapped to just before its nearest corner (0.9 m) and never within 0.7 m of a bend; short runs use their middle.
+    - Known: a leg shorter than ~2.6 m (e.g. the last turn into a room) carries no arrow.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

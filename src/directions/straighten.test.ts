@@ -78,3 +78,41 @@ describe("straighten with a known building grid", () => {
     expect(out[1].x).toBeCloseTo(10.7, 6);
   });
 });
+
+import { cutPosition, pointAt, vertexArcs } from "./straighten";
+
+describe("cutPosition (where a highlight may start or end)", () => {
+  // Runs: 0–10 east, 10–20 north, 20–30 east. Interior corners at arc 10 and 20.
+  const line: XY[] = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 10 }];
+  it("lists interior corner positions", () => {
+    expect(vertexArcs(line)).toEqual([10, 20]);
+  });
+  it("snaps a boundary near a corner to just before it, so the turn is included", () => {
+    expect(cutPosition(line, 10.4)).toBeCloseTo(10 - 0.9);
+    expect(cutPosition(line, 9.2)).toBeCloseTo(10 - 0.9);
+  });
+  it("never lands within 0.7 of a bend", () => {
+    for (let s = 0; s <= 30; s += 0.25) {
+      const c = cutPosition(line, s);
+      vertexArcs(line).forEach((v) => expect(Math.abs(c - v)).toBeGreaterThanOrEqual(0.7 - 1e-9));
+    }
+  });
+  it("leaves boundaries mid-run where they are, and the route's ends alone", () => {
+    expect(cutPosition(line, 15)).toBeCloseTo(15);
+    expect(cutPosition(line, 0.2)).toBe(0);
+    expect(cutPosition(line, 29.8)).toBe(30);
+  });
+  it("uses the middle of a run that's too short for the offset", () => {
+    const tight: XY[] = [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 1.2 }, { x: 10, y: 1.2 }];
+    expect(cutPosition(tight, 5.8)).toBeCloseTo(5.6, 1); // mid of the 1.2 m run (5–6.2)
+  });
+});
+
+describe("pointAt", () => {
+  it("returns the point at an arc length, across corners", () => {
+    const line: XY[] = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }];
+    close(pointAt(line, 4), { x: 4, y: 0 });
+    close(pointAt(line, 13), { x: 10, y: 3 });
+    close(pointAt(line, 99), { x: 10, y: 10 });
+  });
+});

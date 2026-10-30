@@ -165,3 +165,75 @@ export function slice(line: XY[], from: number, to: number): XY[] {
   }
   return out;
 }
+
+/** Arc lengths of the interior corners (everything except the two ends). */
+export function vertexArcs(line: XY[]): number[] {
+  const out: number[] = [];
+  let s = 0;
+  for (let i = 1; i < line.length; i++) {
+    s += len(line[i - 1], line[i]);
+    if (i < line.length - 1) out.push(s);
+  }
+  return out;
+}
+
+export function lineLength(line: XY[]): number {
+  let s = 0;
+  for (let i = 1; i < line.length; i++) s += len(line[i - 1], line[i]);
+  return s;
+}
+
+/** The point at arc length `d` along `line` (clamped to the ends). */
+export function pointAt(line: XY[], d: number): XY {
+  let s = 0;
+  for (let i = 1; i < line.length; i++) {
+    const l = len(line[i - 1], line[i]);
+    if (s + l >= d || i === line.length - 1) {
+      const t = l === 0 ? 0 : Math.max(0, Math.min(1, (d - s) / l));
+      return { x: line[i - 1].x + t * (line[i].x - line[i - 1].x), y: line[i - 1].y + t * (line[i].y - line[i - 1].y) };
+    }
+    s += l;
+  }
+  return line[0];
+}
+
+const CUT_BEFORE_CORNER_M = 0.9; // where a leg starts relative to its turn
+const BEND_CLEAR_M = 0.7; // a cut must stay this far from any bend
+const SNAP_TO_CORNER_M = 2.0; // a boundary this close to a corner belongs to it
+const END_SNAP_M = 0.5;
+
+/**
+ * Where a highlighted section may start or end. The renderer cuts a flat edge
+ * straight across the line, which looks wrong inside a bend. A boundary near
+ * a corner snaps to just before it, so the leg includes the turn you're
+ * making; others stay put unless they'd land in a bend. Runs too short for
+ * the offset get their middle.
+ */
+export function cutPosition(line: XY[], s: number): number {
+  const total = lineLength(line);
+  if (s <= END_SNAP_M) return 0;
+  if (s >= total - END_SNAP_M) return total;
+  const corners = vertexArcs(line);
+  const bounds = [0, ...corners, total];
+
+  // Nearest corner within reach: cut just before it.
+  let target = s;
+  let nearest: number | undefined;
+  for (const c of corners) if (Math.abs(c - s) <= SNAP_TO_CORNER_M && (nearest === undefined || Math.abs(c - s) < Math.abs(nearest - s))) nearest = c;
+  if (nearest !== undefined) target = nearest - CUT_BEFORE_CORNER_M;
+
+  // Keep it BEND_CLEAR_M inside its run, or use the run's middle if too short.
+  let lo = 0;
+  let hi = total;
+  for (let i = 1; i < bounds.length; i++) {
+    if (target <= bounds[i]) {
+      lo = bounds[i - 1];
+      hi = bounds[i];
+      break;
+    }
+  }
+  const innerLo = lo === 0 ? 0 : lo + BEND_CLEAR_M;
+  const innerHi = hi === total ? total : hi - BEND_CLEAR_M;
+  if (innerLo > innerHi) return (lo + hi) / 2;
+  return Math.min(Math.max(target, innerLo), innerHi);
+}
