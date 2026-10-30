@@ -53,6 +53,33 @@ describe("straighten", () => {
   });
 });
 
+describe("straighten ends beside the corridor", () => {
+  it("keeps the run in the doorway and bridges to a far-off end with a stub", () => {
+    // Corridor east along y=0, then north through a door at x=10; the stairs
+    // end sits 0.8 m to the side of that door.
+    const route: XY[] = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 5 }, { x: 10, y: 9 }, { x: 10.8, y: 9.2 }];
+    const out = straighten(route, 0);
+    expect(isRectilinear(out)).toBe(true);
+    // Every vertical stretch stays at the door's x.
+    const verticals = out.slice(1).filter((p, i) => Math.abs(p.x - out[i].x) < 1e-9 && Math.abs(p.y - out[i].y) > 1);
+    expect(verticals.length).toBeGreaterThan(0);
+    expect(out.some((p) => Math.abs(p.x - 10) < 1e-6 && p.y > 8)).toBe(true);
+    close(out[out.length - 1], route[route.length - 1]);
+  });
+});
+
+describe("straighten through doors", () => {
+  it("lines a run up with the doorway the route walks through", () => {
+    // Door at y=-0.4 on the way to an end 0.4 m further over: the run must pass the door.
+    const route: XY[] = [{ x: 0, y: 0 }, { x: 0, y: 6 }, { x: 0, y: 8 }, { x: 5, y: 8.4 }, { x: 8, y: 8.4 }];
+    const door: XY = { x: 4, y: 8.3 };
+    const out = straighten(route, 0, [door]);
+    expect(isRectilinear(out)).toBe(true);
+    expect(out.some((p) => Math.abs(p.y - 8.3) < 1e-6)).toBe(true);
+    close(out[out.length - 1], route[route.length - 1]);
+  });
+});
+
 describe("project / slice", () => {
   const line: XY[] = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }];
   it("measures arc length to the nearest point", () => {

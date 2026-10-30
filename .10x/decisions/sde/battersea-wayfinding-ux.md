@@ -73,6 +73,8 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
 
 22. **Arrows never sit on a bend.** Battersea's arrows are a shader texture spaced by distance with no corner awareness, so a corner can squash one. We draw the highlight without SDK arrows and add white arrow-only overlay paths on straight runs only, at least 1.0 m from a corner and 1.1 m from the leg's ends (runs under 1.4 m get none). Checked on every step of Electrical Room → Huddle 103.
 
+23. **Straightened runs keep going through doorways.** Snapping a run to the building grid could pull it off the door the route actually walks through, so the line cut across the wall beside it. `straighten` now takes the floor's door centres: a run whose original points pass within 0.35 m of a door is lined up with that door. A route end more than 0.5 m off its run's line (stairs beside a door) gets a short perpendicular stub instead of dragging the whole run over. Found on Electrical Room → Huddle 103, stairs leg.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

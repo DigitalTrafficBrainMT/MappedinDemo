@@ -12,6 +12,9 @@ export interface XY {
 /** A run shorter than this between two parallel runs is a jog, not a turn. */
 const JOG_M = 1.5;
 
+/** An end this far off its run's line gets a perpendicular stub, not a drag. */
+const END_STUB_M = 0.5;
+
 type Axis = "H" | "V";
 interface Run {
   axis: Axis;
@@ -51,8 +54,22 @@ export function gridAngle(segments: [XY, XY][]): number {
   return Math.atan2(s, c) / 4;
 }
 
-/** `angle` is the building's grid angle; defaults to one guessed from the route. */
-export function straighten(input: XY[], angle?: number): XY[] {
+const distToSegment = (p: XY, a: XY, b: XY) => {
+  const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2));
+  return len(p, { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+};
+
+/** A door this close to a run's original points is one the route walks through. */
+const DOOR_REACH_M = 0.35;
+
+/**
+ * `angle` is the building's grid angle; defaults to one guessed from the route.
+ * `doors` are door centres: a run that passes through one is lined up with it,
+ * so the straightened line still goes through the doorway rather than the wall
+ * beside it.
+ */
+export function straighten(input: XY[], angle?: number, doors: XY[] = []): XY[] {
   const points = input.filter((p, i) => i === 0 || len(input[i - 1], p) > 0.05);
   if (points.length < 3) return points;
 
@@ -93,13 +110,14 @@ export function straighten(input: XY[], angle?: number): XY[] {
   const end = local[local.length - 1];
   if (runs.length === 1) return [points[0], points[points.length - 1]];
 
-  // Each run is a line at a fixed cross-coordinate. The first and last runs
-  // pass exactly through the route's ends; inner runs sit at the
-  // length-weighted middle of the points they replace.
-  const fixed = runs.map((run, i) => {
+  // Each run is a line at a fixed cross-coordinate, at the length-weighted
+  // middle of the points it replaces — so it keeps going through the doorway
+  // the route used. The first and last runs must still touch the route's
+  // ends; when the end sits well off its run's line (a lift or stairs beside
+  // the door), a short perpendicular stub bridges the gap instead of dragging
+  // the whole run through the wall.
+  const fixed = runs.map((run) => {
     const key = run.axis === "H" ? "y" : "x";
-    if (i === 0) return start[key];
-    if (i === runs.length - 1) return end[key];
     let total = 0;
     let sum = 0;
     for (let k = 1; k < run.points.length; k++) {
@@ -109,12 +127,37 @@ export function straighten(input: XY[], angle?: number): XY[] {
     }
     return sum / total;
   });
+  const localDoors = doors.map((d) => rotate(d, -angle));
+  const throughDoor = runs.map((run, i) => {
+    const key = run.axis === "H" ? "y" : "x";
+    let best: XY | undefined;
+    let bestDist = DOOR_REACH_M;
+    for (const door of localDoors) {
+      for (let k = 1; k < run.points.length; k++) {
+        const dist = distToSegment(door, run.points[k - 1], run.points[k]);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = door;
+        }
+      }
+    }
+    if (best) fixed[i] = best[key];
+    return best !== undefined;
+  });
+  const last = runs.length - 1;
+  const endOffset = (i: number, ref: XY) => Math.abs(fixed[i] - ref[runs[i].axis === "H" ? "y" : "x"]);
+  const snapStart = !throughDoor[0] && endOffset(0, start) <= END_STUB_M;
+  const snapEnd = !throughDoor[last] && endOffset(last, end) <= END_STUB_M;
+  if (snapStart) fixed[0] = start[runs[0].axis === "H" ? "y" : "x"];
+  if (snapEnd) fixed[last] = end[runs[last].axis === "H" ? "y" : "x"];
 
   // Consecutive runs alternate axes, so each corner is their intersection.
   const out: XY[] = [start];
-  for (let i = 0; i < runs.length - 1; i++) {
+  if (!snapStart) out.push(runs[0].axis === "H" ? { x: start.x, y: fixed[0] } : { x: fixed[0], y: start.y });
+  for (let i = 0; i < last; i++) {
     out.push(runs[i].axis === "H" ? { x: fixed[i + 1], y: fixed[i] } : { x: fixed[i], y: fixed[i + 1] });
   }
+  if (!snapEnd) out.push(runs[last].axis === "H" ? { x: end.x, y: fixed[last] } : { x: fixed[last], y: end.y });
   out.push(end);
   return out.map((p) => rotate(p, angle));
 }

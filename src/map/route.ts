@@ -92,7 +92,7 @@ export class RouteLayer {
     const flush = () => {
       if (current.length >= 2) {
         const floorId = current[0].floorId ?? "";
-        const line = straighten(current.map((c) => this.toXY(c)), this.wallAngle(floorId));
+        const line = straighten(current.map((c) => this.toXY(c)), this.wallAngle(floorId), this.doorCentres(floorId));
         const path = this.mapView.Paths.add(this.toCoordinates(floorId, line), {
           ...ROUTE_SHAPE,
           color: ROUTE_COLOR,
@@ -233,6 +233,14 @@ export class RouteLayer {
     const angle = segments.length ? gridAngle(segments) : undefined;
     if (angle !== undefined) this.wallAngles.set(floorId, angle);
     return angle;
+  }
+
+  /** Door centres on a floor, so straightened runs keep going through doorways. */
+  private doorCentres(floorId: string): XY[] {
+    return this.mapData
+      .getByType("door")
+      .filter((door) => door.floor.id === floorId)
+      .map((door) => this.toXY(door.center));
   }
 
   private lngLatToXY([lng, lat]: number[]): XY {
