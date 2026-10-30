@@ -21,8 +21,11 @@ export function progressHtml(steps: Step[], current: number | null): string {
       const done = current !== null && node.index < current;
       const isCurrent = current !== null && node.index === current;
       let glyph = "";
-      if (node.kind === "connection") glyph = icon(done ? "check" : connectionIconName(node.connectionType));
-      if (node.kind === "end") glyph = icon(isCurrent ? "check" : "pin");
+      // One marker per place: a stairs/lift icon for connections, and a single
+      // pin at the end. Only the arrival gets a check, so there are no
+      // doubled bubbles at the top.
+      if (node.kind === "connection") glyph = icon(connectionIconName(node.connectionType));
+      if (node.kind === "end") glyph = icon("pin");
       const state = `${done ? " is-done" : ""}${isCurrent ? " is-current" : ""}`;
       return `<span class="pnode pnode--${node.kind}${state}" style="--pos:${node.position * 100}%">${glyph}</span>`;
     })
@@ -32,7 +35,7 @@ export function progressHtml(steps: Step[], current: number | null): string {
   </div>`;
 }
 
-export function timelineHtml(steps: Step[], fromName: string, toName: string, current: number | null): string {
+export function timelineHtml(steps: Step[], fromName: string, _toName: string, current: number | null): string {
   const rows = steps
     .map((step, i) => {
       const active = i === current;
@@ -49,7 +52,6 @@ export function timelineHtml(steps: Step[], fromName: string, toName: string, cu
   return `<div class="timeline">
     <p class="tl-place"><span class="tl-place-mark"><span class="tl-dot"></span></span><span>${esc(fromName)}</span></p>
     <ol class="tl-steps" aria-label="Steps">${rows}</ol>
-    <p class="tl-place tl-place--end"><span class="tl-place-mark">${icon("pin")}</span><span>${esc(toName)}</span></p>
   </div>`;
 }
 

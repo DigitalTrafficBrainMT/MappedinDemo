@@ -316,11 +316,18 @@ function setup(mapData: MapData, mapView: MapView) {
       setFloor(s.toFloorId);
       return camera.floorRoute(coordinatesOnFloor(d.coordinates, s.toFloorId));
     }
-    // On arrival, keep the final approach in view.
-    const leg = s.kind === "arrive" && step > 0 ? r.steps[step - 1] : s;
-    const from = d.instructions[leg.rawIndex].coordinate;
-    const to = d.instructions[leg.legEndIndex].coordinate;
-    setFloor(leg.floorId);
+    if (s.kind === "arrive") {
+      // Arrived: the previous step's leg already ended here, so highlighting
+      // it again would repeat it. Clear the navy and frame the final approach.
+      route.clearHighlight();
+      const last = d.instructions[s.rawIndex].coordinate;
+      const prev = d.instructions[Math.max(0, s.rawIndex - 1)].coordinate;
+      setFloor(s.floorId);
+      return camera.leg(legCoordinates(d.coordinates, prev, last));
+    }
+    const from = d.instructions[s.rawIndex].coordinate;
+    const to = d.instructions[s.legEndIndex].coordinate;
+    setFloor(s.floorId);
     route.highlight(from, to);
     return camera.leg(legCoordinates(d.coordinates, from, to));
   }
