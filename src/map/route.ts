@@ -26,6 +26,17 @@ const ROUND_CAP_M = 0.5;
 const ARROW_CORNER_CLEARANCE_M = 1.0;
 /** A straight run needs at least this much room to carry an arrow. */
 const ARROW_MIN_RUN_M = 1.4;
+/** Arrows stay this far from the start/end of a leg, clear of stairs pills and pins. */
+const ARROW_END_CLEARANCE_M = 1.1;
+/** Length of the blue→navy fade, and how many colour steps it uses. */
+const FADE_M = 1.2;
+const FADE_STEPS = 5;
+
+function mixColor(a: string, b: string, t: number): string {
+  const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  const m = (i: number) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t);
+  return `#${[0, 1, 2].map((i) => m(i).toString(16).padStart(2, "0")).join("")}`;
+}
 
 function lineLength(line: XY[]): number {
   let total = 0;
@@ -123,29 +134,53 @@ export class RouteLayer {
 
     const leg = slice(stretch.line, start, end);
     if (!forward) leg.reverse();
-    const roundStart = (forward ? start : stretch.length - end) < 0.01;
-    const roundEnd = (forward ? stretch.length - end : start) < 0.01;
 
     // The navy body: identical width, caps and corner smoothing to the blue
-    // underneath, so the two read as one line that only changes colour.
-    this.legPaths.push(
-      this.addLine(stretch.floorId, leg, {
-        color: ROUTE_ACTIVE_COLOR,
-        caps: [roundStart ? ROUND_CAP_M : 0, roundEnd ? ROUND_CAP_M : 0],
-        border: false,
-        widthScale: 1,
-        verticalOffset: 0.12,
-        drawDuration: motion(CAMERA.highlightDuration),
-      }),
+    // underneath. Where it meets the blue it fades over FADE_M through a few
+    // short pieces of stepped colour (the SDK has no per-path gradient).
+    // Ramps sit in the straight run beyond the corner, and are skipped at the
+    // route's own ends, where there's no blue to fade into.
+    const fade = Math.min(FADE_M, (end - start) / 3);
+    // Line order (not travel order): the body runs from `start` to `end`.
+    const startIsRoute = start < 0.01;
+    const endIsRoute = stretch.length - end < 0.01;
+    const inFade = startIsRoute ? 0 : fade;
+    const outFade = endIsRoute ? 0 : fade;
+    const piece = (from: number, to: number, color: string, capA: number, capB: number, duration = 0) =>
+      this.legPaths.push(
+        this.addLine(stretch.floorId, slice(stretch.line, from, to), {
+          color,
+          caps: [capA, capB],
+          widthScale: 1,
+          verticalOffset: 0.12,
+          drawDuration: duration,
+        }),
+      );
+    const stepLen = (n: number, f: number) => f / n;
+    for (let i = 0; i < FADE_STEPS && inFade > 0; i++) {
+      const from = start + i * stepLen(FADE_STEPS, inFade);
+      piece(from, from + stepLen(FADE_STEPS, inFade), mixColor(ROUTE_COLOR, ROUTE_ACTIVE_COLOR, (i + 0.5) / FADE_STEPS), 0, 0);
+    }
+    piece(
+      start + inFade,
+      end - outFade,
+      ROUTE_ACTIVE_COLOR,
+      startIsRoute ? ROUND_CAP_M : 0,
+      endIsRoute ? ROUND_CAP_M : 0,
+      motion(CAMERA.highlightDuration),
     );
+    for (let i = 0; i < FADE_STEPS && outFade > 0; i++) {
+      const from = end - outFade + i * stepLen(FADE_STEPS, outFade);
+      piece(from, from + stepLen(FADE_STEPS, outFade), mixColor(ROUTE_ACTIVE_COLOR, ROUTE_COLOR, (i + 0.5) / FADE_STEPS), 0, 0);
+    }
 
     // Arrows only on the straight runs, clear of every bend.
     for (let i = 1; i < leg.length; i++) {
       const a = leg[i - 1];
       const b = leg[i];
       const runLength = Math.hypot(b.x - a.x, b.y - a.y);
-      const clearA = i === 1 ? 0.4 : ARROW_CORNER_CLEARANCE_M;
-      const clearB = i === leg.length - 1 ? 0.4 : ARROW_CORNER_CLEARANCE_M;
+      const clearA = i === 1 ? ARROW_END_CLEARANCE_M : ARROW_CORNER_CLEARANCE_M;
+      const clearB = i === leg.length - 1 ? ARROW_END_CLEARANCE_M : ARROW_CORNER_CLEARANCE_M;
       if (runLength - clearA - clearB < ARROW_MIN_RUN_M) continue;
       const along = (d: number) => ({ x: a.x + ((b.x - a.x) * d) / runLength, y: a.y + ((b.y - a.y) * d) / runLength });
       this.legPaths.push(

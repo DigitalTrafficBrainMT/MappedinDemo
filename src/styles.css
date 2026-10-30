@@ -351,13 +351,23 @@ button {
   list-style: none;
 }
 
-.tl-steps::before {
+/* The dotted rail is drawn per row so it can stop at the arrival: the last
+   row only gets the upper half, ending at its pin. */
+.tl-steps li {
+  position: relative;
+}
+
+.tl-steps li::before {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
   left: var(--rail);
   border-left: 2px dotted #c4c4c4;
+}
+
+.tl-steps li:last-child::before {
+  bottom: 50%;
 }
 
 .tl-step {

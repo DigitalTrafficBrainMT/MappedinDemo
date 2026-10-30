@@ -18,7 +18,10 @@ function totalOf(steps: Step[]): number {
   return steps.length ? steps[steps.length - 1].cumulative : 0;
 }
 
-export function buildProgress(steps: Step[]): ProgressNode[] {
+/** A dot closer than this (fraction of the bar) to an icon would sit under it. */
+const DOT_CLEARANCE = 0.11;
+
+function allNodes(steps: Step[]): ProgressNode[] {
   const total = totalOf(steps);
   return steps.map((step, index) => {
     const position = index === 0 ? 0 : index === steps.length - 1 || total === 0 ? 1 : step.cumulative / total;
@@ -26,13 +29,21 @@ export function buildProgress(steps: Step[]): ProgressNode[] {
     if (index === 0) kind = "start";
     else if (index === steps.length - 1) kind = "end";
     else if (step.kind === "take-connection") kind = "connection";
-    return { index, kind, connectionType: step.connectionType, position };
+    return { index, kind, connectionType: step.connectionType, position } as ProgressNode;
   });
+}
+
+export function buildProgress(steps: Step[]): ProgressNode[] {
+  const all = allNodes(steps);
+  // Icons win over dots: a dot next to the start ring, stairs icon or end pin
+  // only gets in the way (it was peeking out from under the end pin).
+  const icons = all.filter((n) => n.kind !== "dot");
+  return all.filter((n) => n.kind !== "dot" || icons.every((i) => Math.abs(i.position - n.position) >= DOT_CLEARANCE));
 }
 
 /** How far the fill reaches with `current` as the active step (null = overview). */
 export function fillFraction(steps: Step[], current: number | null): number {
   if (current === null || steps.length === 0) return 0;
-  const nodes = buildProgress(steps);
+  const nodes = allNodes(steps); // every step, including hidden dots
   return nodes[Math.min(Math.max(current, 0), nodes.length - 1)].position;
 }

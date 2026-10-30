@@ -56,6 +56,12 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
 
 17. **One line, two colours** (user feedback: seams, width step, corner mismatch, heavier bend edges). Root cause: the blue and navy paths differed in border (blue had one), width (navy 1.06x) and therefore corner geometry. Both now share one style (`ROUTE_SHAPE`, flat, no border, same width, same smoothing) and differ only in colour. Connection markers use `placement: "top"` so the stairs pill sits beside the line, not on it.
 
+18. **Soft fade, fewer dots, rail ends at arrival** (user request):
+    - The navy leg now fades into the blue over 1.2 m through 5 stepped colours (the SDK has no per-path gradient), skipped at the route's own ends.
+    - Progress dots within 11% of an icon are dropped; the fill still uses every step's position.
+    - The dotted rail is drawn per row and the last row only gets its upper half, so it stops at the arrival pin.
+    - Arrows keep 1.1 m clear of leg ends so they don't sit on stairs pills.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

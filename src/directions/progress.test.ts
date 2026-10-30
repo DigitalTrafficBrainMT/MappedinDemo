@@ -39,3 +39,13 @@ describe("fillFraction", () => {
     expect(fillFraction(steps, steps.length - 1)).toBe(1);
   });
 });
+
+describe("dots vs icons", () => {
+  it("drops dots that would sit under an icon, keeps the rest", () => {
+    const nodes = buildProgress(steps);
+    const icons = nodes.filter((n) => n.kind !== "dot");
+    nodes.filter((n) => n.kind === "dot").forEach((dot) =>
+      icons.forEach((i) => expect(Math.abs(i.position - dot.position)).toBeGreaterThanOrEqual(0.11)),
+    );
+  });
+});
