@@ -54,6 +54,8 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
     - The base line is **one continuous path per floor**. The navy leg is laid on top with the same geometry and no border (a border drew ticks across square cuts).
     - **Arrows only on straight parts** of the navy leg, at least 1 m clear of bends. The SDK spaces arrows evenly, so some used to land on curves and get squashed.
 
+17. **One line, two colours** (user feedback: seams, width step, corner mismatch, heavier bend edges). Root cause: the blue and navy paths differed in border (blue had one), width (navy 1.06x) and therefore corner geometry. Both now share one style (`ROUTE_SHAPE`, flat, no border, same width, same smoothing) and differ only in colour. Connection markers use `placement: "top"` so the stairs pill sits beside the line, not on it.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.

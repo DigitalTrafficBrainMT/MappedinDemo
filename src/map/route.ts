@@ -73,7 +73,8 @@ export class RouteLayer {
         Markers.add(
           instruction.coordinate,
           connectionMarkerHtml(instruction.action.connection?.type, travelDirection(instruction)),
-          options,
+          // "top" puts the pill beside/above the stairwell, not on the line.
+          { ...options, placement: "top" as const },
         ),
       );
     }
@@ -125,14 +126,14 @@ export class RouteLayer {
     const roundStart = (forward ? start : stretch.length - end) < 0.01;
     const roundEnd = (forward ? stretch.length - end : start) < 0.01;
 
-    // The navy body: no border (it would draw ticks across the square cuts),
-    // a hair wider than the base so the blue's edge can't show.
+    // The navy body: identical width, caps and corner smoothing to the blue
+    // underneath, so the two read as one line that only changes colour.
     this.legPaths.push(
       this.addLine(stretch.floorId, leg, {
         color: ROUTE_ACTIVE_COLOR,
         caps: [roundStart ? ROUND_CAP_M : 0, roundEnd ? ROUND_CAP_M : 0],
         border: false,
-        widthScale: 1.06,
+        widthScale: 1,
         verticalOffset: 0.12,
         drawDuration: motion(CAMERA.highlightDuration),
       }),
@@ -152,7 +153,7 @@ export class RouteLayer {
           color: ROUTE_ACTIVE_COLOR,
           caps: [0, 0],
           border: false,
-          widthScale: 1.06,
+          widthScale: 1,
           verticalOffset: 0.14,
           arrows: true,
           drawDuration: 0,

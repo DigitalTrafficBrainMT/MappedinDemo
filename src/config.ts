@@ -40,7 +40,10 @@ export const ROUTE_SHAPE = {
   // Mappedin's guidance: tension 0.1–0.3 with the default 0.5 m corner radius.
   // Larger radii overlap on short legs and show seams in the bends.
   smoothing: { tension: 0.2, cornerRadius: 0.5 },
-  border: { enabled: true, color: "darken", width: 0.12 },
+  // No border: Battersea's line is flat. A border on one piece but not the
+  // other (or on the base only) is what made bends look heavier and the
+  // navy/blue joins look stepped.
+  border: { enabled: false, color: "darken" },
   // Parts of a path hidden behind walls/door frames are redrawn as a faint
   // "x-ray" copy by default, which showed as light-blue lumps at corners.
   // With one floor shown at a time there's nothing worth seeing through.
