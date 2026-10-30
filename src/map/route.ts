@@ -18,6 +18,12 @@ import { motion } from "../util/motion";
 import { connectionMarkerHtml, departureMarkerHtml, destinationMarkerHtml } from "./markers";
 
 const EARTH_M_PER_DEG = 111_320;
+// Heights above the floor (metres) for each layer. They overlap in the bends,
+// and layers only ~2 cm apart flicker against each other (z-fighting) because
+// the depth buffer can't separate them at a tilted camera. Wide gaps fix that.
+const Z_BASE = 0.05;
+const Z_LEG = 0.2;
+const Z_ARROWS = 0.35;
 /** How far the navy leg continues past a corner, so the bend is all navy. */
 const LEG_OVERRUN_M = 1.2;
 /** The SDK's default ribbon endcap, kept where the route itself starts/ends. */
@@ -30,7 +36,7 @@ const ARROW_MIN_RUN_M = 1.4;
 const ARROW_END_CLEARANCE_M = 1.1;
 /** Length of the blue→navy fade, and how many colour steps it uses. */
 const FADE_M = 1.2;
-const FADE_STEPS = 5;
+const FADE_STEPS = 10;
 
 function mixColor(a: string, b: string, t: number): string {
   const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
@@ -152,7 +158,7 @@ export class RouteLayer {
           color,
           caps: [capA, capB],
           widthScale: 1,
-          verticalOffset: 0.12,
+          verticalOffset: Z_LEG,
           drawDuration: duration,
         }),
       );
@@ -189,7 +195,7 @@ export class RouteLayer {
           caps: [0, 0],
           border: false,
           widthScale: 1,
-          verticalOffset: 0.14,
+          verticalOffset: Z_ARROWS,
           arrows: true,
           drawDuration: 0,
         }),
@@ -242,7 +248,7 @@ export class RouteLayer {
       accentColor: ROUTE_ARROW_COLOR,
       displayArrowsOnPath: o.arrows ?? false,
       endcapExtension: o.caps,
-      verticalOffset: o.verticalOffset ?? 0.1,
+      verticalOffset: o.verticalOffset ?? Z_BASE,
       animateDrawing: o.drawDuration > 0,
       drawDuration: o.drawDuration,
     });

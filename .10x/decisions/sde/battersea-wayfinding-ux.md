@@ -62,6 +62,8 @@ The Vite scaffold was removed: `counter.ts`, `style.css`, `assets/`, `public/ico
     - The dotted rail is drawn per row and the last row only gets its upper half, so it stops at the arrival pin.
     - Arrows keep 1.1 m clear of leg ends so they don't sit on stairs pills.
 
+19. **Corner streaks were z-fighting.** Base, navy leg and arrows sat at 0.10/0.12/0.14 m above the floor, 2 cm apart, so the depth buffer flickered where their rounded corners overlapped. Layers now sit at 0.05/0.20/0.35 m (`Z_BASE`/`Z_LEG`/`Z_ARROWS`). The fade uses 10 thin steps so it reads as a gradient, not bands.
+
 ## Tech debt / known issues
 - **Duplicate room names** (two "Electrical Room · Level 2") can't be told apart in lists. This is a data issue. A "near {landmark}" subtitle would fix it.
 - **Whole-floor overview labels.** At overview zoom most room labels are hidden by the SDK's collision rules, and they appear on zoom-in. Battersea behaves the same way, but our office has few large rooms.
